@@ -1,6 +1,10 @@
 #include <map>
+#include <player.h>
 #include <stdexcept>
 
+/**
+ * Status Effects 
+ */
 enum class Status {
 BURN,
 STRENGTH
@@ -21,10 +25,12 @@ inline std::map<Status, bool> is_curse = {
  */
 class Unit {
 public:
-    Unit() : health(0), maxHealth(0), dmg(0), mov(0), range(0) {}
+    Unit(Player player) : player(player), health(0), maxHealth(0), dmg(0), mov(0), range(0) {}
     
-    Unit(int maxHealth, int dmg, int mov, int range) 
-        : health(maxHealth)
+    Unit(Player player, int maxHealth, int dmg, int mov, int range) 
+        : 
+        player(player),
+        health(maxHealth)
         , maxHealth(maxHealth)
         , dmg(dmg)
         , mov(mov)
@@ -50,6 +56,7 @@ public:
     }
 
 private:
+    Player player;
     int health;
     int maxHealth;
     int dmg;
@@ -66,23 +73,25 @@ enum class UnitType {
 class UnitFactory {
 public:
     static Unit create(UnitType type) {
+        int id = nextId++;
         switch (type) {
             case UnitType::Warrior:
-                return createWarrior();
+                return createWarrior(id);
             case UnitType::Archer:
-                return Unit(75, 15, 2, 3);
+                return Unit(id, 75, 15, 2, 3);
             default:
                 throw std::invalid_argument("Unknown UnitType");
         }
     }
 
 private:
-    static Unit createWarrior() {
-        return Unit(100, 20, 2, 1);
+    static int nextId;
+    
+    static Unit createWarrior(int id) {
+        return Unit(id, 100, 20, 2, 1);
     }
 
-    static Unit createArcher() {
-        return Unit(75, 15, 2, 3);
+    static Unit createArcher(int id) {
+        return Unit(id, 75, 15, 2, 3);
     }
 };
-

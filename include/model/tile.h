@@ -1,11 +1,24 @@
 #pragma once
 #include <optional>
 
-#include "include/model/types.h"
+#include "include/model/util.h"
 #include "include/model/unit.h"
+
+enum class TileModifier {
+    ONFIRE
+};
+
+enum Terrain {
+    GRASS,
+    FOREST,
+    WATER,
+    MOUNTAIN
+};
+
 
 class Tile {
     public:
+        // Tile() : terrain(Probability::roll(75.0f) ? GRASS : FOREST) {}
         Tile() : terrain(GRASS) {}
         Tile(Terrain t) : terrain(t) {}
 
@@ -44,8 +57,8 @@ class Tile {
         }
         
 
-    private:
-        Terrain terrain;
-        std::optional<Unit> unit;
-    };
+private:
+    Terrain terrain;
+    std::optional<Unit> unit;
+};
 
