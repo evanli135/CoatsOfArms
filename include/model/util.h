@@ -63,4 +63,10 @@ public:
         row_ += dRow;
         col_ += dCol;
     }
+
+    bool operator==(const Position& other) const {
+        return row_ == other.row_ && col_ == other.col_;
+    }
+
+    bool operator!=(const Position& other) const { return !(*this == other); }
 };

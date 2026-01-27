@@ -1,6 +1,8 @@
 #pragma once
 
 #include <vector>
+
+#include "observer.h"
 #include "tile.h"
 #include "player.h"
 
@@ -23,10 +25,15 @@ public:
     const Player& getCurrentPlayer() const;
     void nextTurn();
 
+
 private:
     std::vector<std::vector<Tile>> map;
     std::vector<Player> players;  // Note: can't have vector of references
     int currentPlayerIndex;
+
+    int turn = 0;
+
+    std::map<ModelEvent, ModelObserver*> observers;
 };
 
 namespace Logic {

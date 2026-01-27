@@ -19,11 +19,11 @@ std::optional<Unit>& World::getUnitAt(const Position& pos) {
 
 
 const Tile& World::getTileAt(const Position& pos) const {
-    return map.at(pos.row).at(pos.col);
+    return map.at(pos.row()).at(pos.col());
 }
 
 Tile& World::getTileAt(const Position& pos) {
-    return map.at(pos.row).at(pos.col);
+    return map.at(pos.row()).at(pos.col());
 }
 
 void World::moveUnit(const Position& from, const Position& to) {
@@ -52,7 +52,13 @@ bool World::canMove(const Position& from, const Position& to) {
     return true;
 }
 
-using namespace Logic;
+void World::nextTurn() {
+    turn++;
+    currentPlayerIndex = (currentPlayerIndex + 1) % players.size();
+    
+    
+}
+
 
 int Logic::stepCost(const Unit& unit, const Tile& tile) {
     switch (tile.getTerrain()) {

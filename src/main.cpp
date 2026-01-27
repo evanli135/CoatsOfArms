@@ -6,7 +6,7 @@ int main() {
     InitWindow(800, 450, "raylib is alive");
     SetTargetFPS(60);
     
-    Probability::init(); 
+    // Probability::init(); 
 
     while (!WindowShouldClose()) {
         BeginDrawing();

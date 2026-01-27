@@ -4,7 +4,7 @@
 
 
 ## Run With:
-`$ ./build.ps1`
+`$ ./scripts/build.ps1`
 `$ ./bin/revroyale.exe`
 Uses C++ and Raylib
 

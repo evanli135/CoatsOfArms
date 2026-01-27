@@ -43,6 +43,7 @@ public:
     int getDamage() const { return dmg; }
     int getMovement() const { return mov; }
     int getRange() const { return range; }
+    const Player& getPlayer() const { return player; }
 
     void raiseHP(int amount) {
         if (amount < 0) throw std::invalid_argument("Amount must be non-negative");
