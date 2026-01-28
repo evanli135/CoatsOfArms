@@ -21,7 +21,7 @@ private:
     int screenWidth, screenHeight;
     int fontSize = 24;
     int cellWidth, cellHeight;
-    //     int gridOffsetX, gridOffsetY;
+    int gridOffsetX, gridOffsetY;
 
     void renderGrid(const World& world, const Position& cursor);
     void renderCell(const World& world, const Position& pos, bool isCursor);
