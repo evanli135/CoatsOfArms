@@ -1,6 +1,7 @@
+#pragma once
 
 enum class ModelEvent {
-    TURN_CHANGE,
+    TURN_CHANGE
 };
 
 /**
@@ -15,3 +16,4 @@ public:
      */
     virtual void onModelChanged(ModelEvent event) = 0;
 };
+

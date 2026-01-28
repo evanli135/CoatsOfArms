@@ -25,10 +25,11 @@ inline std::map<Status, bool> is_curse = {
  */
 class Unit {
 public:
-    Unit(Player player) : player(player), health(0), maxHealth(0), dmg(0), mov(0), range(0) {}
+    Unit(UnitType type, Player player) : type(type), player(player), health(0), maxHealth(0), dmg(0), mov(0), range(0) {}
     
-    Unit(Player player, int maxHealth, int dmg, int mov, int range) 
+    Unit(UnitType type, Player player, int maxHealth, int dmg, int mov, int range) 
         : 
+        type(type),
         player(player),
         health(maxHealth)
         , maxHealth(maxHealth)
@@ -43,7 +44,9 @@ public:
     int getDamage() const { return dmg; }
     int getMovement() const { return mov; }
     int getRange() const { return range; }
-    const Player& getPlayer() const { return player; }
+    const Player& getOwner() const { return player; }
+    UnitType getType() const { return type; }
+    bool canMove() const;
 
     void raiseHP(int amount) {
         if (amount < 0) throw std::invalid_argument("Amount must be non-negative");
@@ -57,12 +60,13 @@ public:
     }
 
 private:
-    Player player;
     int health;
     int maxHealth;
     int dmg;
     int mov;
     int range;
+    UnitType type;
+    Player player;
 };
 
 
@@ -73,13 +77,13 @@ enum class UnitType {
 
 class UnitFactory {
 public:
-    static Unit create(UnitType type) {
+    static Unit create(UnitType type, Player player) {
         int id = nextId++;
         switch (type) {
             case UnitType::Warrior:
-                return createWarrior(id);
+                return createWarrior(player);
             case UnitType::Archer:
-                return Unit(id, 75, 15, 2, 3);
+                return createArcher(player);
             default:
                 throw std::invalid_argument("Unknown UnitType");
         }
@@ -88,11 +92,11 @@ public:
 private:
     static int nextId;
     
-    static Unit createWarrior(int id) {
-        return Unit(id, 100, 20, 2, 1);
+    static Unit createWarrior(Player player) {
+        return Unit(UnitType::Warrior, player, 100, 20, 2, 1);
     }
 
-    static Unit createArcher(int id) {
-        return Unit(id, 75, 15, 2, 3);
+    static Unit createArcher(Player player) {
+        return Unit(UnitType::Archer, player, 75, 15, 2, 3);
     }
 };

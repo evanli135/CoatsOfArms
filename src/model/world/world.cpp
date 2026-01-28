@@ -3,7 +3,6 @@
 #include "include/model/world.h"
 #include <stdexcept>
 
-using namespace Model;
 
 World::World() 
     : map(Game::HEIGHT, std::vector<Tile>(Game::WIDTH, Tile())),
