@@ -95,7 +95,7 @@ private:
     bool myTurn = false;
 
 
-    Model::World& model;
+    World& model;
 
     std::optional<Position> selectedPosition;
 
@@ -157,15 +157,16 @@ private:
                     return PlayerError::NOTSUPPORTED;
                 }                 
                 else {
+                    // NOTE: This is bad, need to fix later
                     model.battle(oldPos, newPos);
                     selectedPosition = std::nullopt;
                     return std::nullopt;
                 }
             }
         } else {
+            // NOTE: This is bad, need to fix later
             model.moveUnit(oldPos, newPos);
             selectedPosition = std::nullopt;
-
         }
     }
 

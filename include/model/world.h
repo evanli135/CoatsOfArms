@@ -6,7 +6,6 @@
 #include "tile.h"
 #include "player.h"
 
-namespace Model {
 class World {
 public:
     World();
@@ -17,6 +16,8 @@ public:
 
     const Tile& getTileAt(const Position& pos) const;
     Tile& getTileAt(const Position& pos);
+
+    bool hasUnitAt(const Position& from) const;
 
     void moveUnit(const Position& from, const Position& to);
     bool canMove(const Position& from, const Position& to);
@@ -46,6 +47,5 @@ namespace Logic {
 
     int stepCost(const Unit& unit, const Tile& tile);
     int pathCost(const Position& origin, const Position& destination);
-
-}
+    
 }
