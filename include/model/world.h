@@ -4,6 +4,7 @@
 
 #include "observer.h"
 #include "tile.h"
+#include "error.h"
 #include "player.h"
 
 class World {
@@ -11,21 +12,20 @@ public:
     World();
     ~World() = default;
 
-    const std::optional<Unit>& getUnitAt(const Position& pos) const;
+    const std::optional<const Unit>& getUnitAt(const Position& pos) const;
     std::optional<Unit>& getUnitAt(const Position& pos);
 
     const Tile& getTileAt(const Position& pos) const;
     Tile& getTileAt(const Position& pos);
 
     bool hasUnitAt(const Position& from) const;
-
-    void moveUnit(const Position& from, const Position& to);
     bool canMove(const Position& from, const Position& to);
-    void battle(const Position& attackerPos, const Position& defenderPos);
+    bool canAttack(const Position& from, const Position& to);
 
     const Player& getCurrentPlayer() const;
     void nextTurn();
 
+    std::optional<PlayerError> applyControllerRequest(ControllerRequest action);
 
 private:
     std::vector<std::vector<Tile>> map;
@@ -48,4 +48,6 @@ namespace Logic {
     int stepCost(const Unit& unit, const Tile& tile);
     int pathCost(const Position& origin, const Position& destination);
     
+    void moveUnit(const Position& from, const Position& to);
+    void battle(const Position& attackerPos, const Position& defenderPos);
 }

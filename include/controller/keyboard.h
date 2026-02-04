@@ -5,12 +5,10 @@
 #include "model/util.h"
 #include "model/world.h"
 #include "model/error.h"
-#include "model/observer.h"
+#include "observer.h"
 #include "model/player.h"
 
-namespace polytopia {
-
-enum class PlayerAction {
+enum class KeyboardAction {
     LEFT,
     RIGHT,
     UP,
@@ -18,6 +16,29 @@ enum class PlayerAction {
     SELECT,
     UNSELECT,
     CONFIRM
+};
+
+enum class ControllerAction {
+    MOV,
+    ATT
+};
+
+
+struct ControllerRequest {
+private:
+    ControllerAction action;
+    Position origin;
+    Position destination;
+    Player player;
+
+public:
+    ControllerAction getAction() { return action; }
+    Position getOrigin() { return origin; }
+    Position getDestination() { return destination; }
+    Player getPlayer() { return player; }
+
+    ControllerRequest(ControllerAction action, Position origin, Position destination, Player player)
+     : action(action), origin(origin), destination(destination), player(player) {}
 };
 
 class KeyState {
@@ -44,7 +65,7 @@ public:
     KeyboardController(World& model, const Player& player);
     
     void go();
-    std::optional<PlayerError> action(PlayerAction playerAction);
+    std::optional<PlayerError> applyKeyboardAction(KeyboardAction KeyboardAction);
     void onModelChanged(ModelEvent event) override;
     
     const Position& getHoverPosition() const { return hoverPosition; }
@@ -67,6 +88,5 @@ private:
     std::optional<PlayerError> moveHover(int dRow, int dCol);
     void endTurn();
     std::optional<PlayerError> selectCell();
+    // std::optional<PlayerError> applyControllerAction(ControllerAction action);
 };
-
-} // namespace polytopia

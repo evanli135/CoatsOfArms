@@ -6,8 +6,8 @@
  * Status Effects 
  */
 enum class Status {
-BURN,
-STRENGTH
+    BURN,
+    STRENGTH
 };
 
 inline std::map<Status, bool> is_curse = {
@@ -47,6 +47,8 @@ public:
     const Player& getOwner() const { return player; }
     UnitType getType() const { return type; }
     bool canMove() const;
+
+    bool sameOwner(Player& player) {return this->player.getId() == player.getId(); }
 
     void raiseHP(int amount) {
         if (amount < 0) throw std::invalid_argument("Amount must be non-negative");

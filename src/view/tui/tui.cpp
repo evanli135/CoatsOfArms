@@ -15,7 +15,7 @@ TUI::TUI(int screenWidth, int screenHeight)
 void TUI::render(
     const World& world,
     const Position& cursor,
-    const Unit* selectedUnit,
+    std::optional<const Unit*> selectedUnit,
     int currentPlayer
 ) {
     ClearBackground(Color{20, 20, 30, 255});
@@ -86,7 +86,7 @@ void TUI::renderCell(const World& world, const Position& pos, bool isCursor) {
         }
     }
 
-void TUI::renderInfoPanel(const World& world, const Unit* selectedUnit, int currentPlayer) {
+void TUI::renderInfoPanel(const World& world, std::optional<const Unit*> selectedUnit, int currentPlayer) {
     int panelX = gridOffsetX + 10 * cellWidth + 50;
     int panelY = gridOffsetY;
     int lineHeight = 25;
@@ -95,26 +95,27 @@ void TUI::renderInfoPanel(const World& world, const Unit* selectedUnit, int curr
     DrawText("═══ INFO ═══", panelX, currentY, 22, RAYWHITE);
     currentY += 40;
     
-    if (selectedUnit) {
-        Color unitColor = getPlayerColor(selectedUnit->getOwner().getId());
+    if (selectedUnit.has_value()) {
+        const Unit* unit = selectedUnit.value();
+        Color unitColor = getPlayerColor(unit->getOwner().getId());
         
         // Unit type with emoji
-        const char* emoji = getUnitEmoji(selectedUnit->getType());
+        const char* emoji = getUnitEmoji(unit->getType());
         DrawText(TextFormat("%s %s", emoji, 
-                selectedUnit->getType() == UnitType::Warrior ? "Warrior" : "Archer"),
+                unit->getType() == UnitType::Warrior ? "Warrior" : "Archer"),
                 panelX, currentY, 20, unitColor);
         currentY += lineHeight;
         
         // Stats
-        DrawText(TextFormat("Owner: Player %d", selectedUnit->getOwner().getId() + 1),
+        DrawText(TextFormat("Owner: Player %d", unit->getOwner().getId() + 1),
                 panelX, currentY, 18, LIGHTGRAY);
         currentY += lineHeight;
         
-        DrawText(TextFormat("Health: %d", selectedUnit->getHealth()),
+        DrawText(TextFormat("Health: %d", unit->getHealth()),
                 panelX, currentY, 18, LIGHTGRAY);
         currentY += lineHeight;
         
-        DrawText(TextFormat("Attack: %d", selectedUnit->getDamage()),
+        DrawText(TextFormat("Attack: %d", unit->getDamage()),
                 panelX, currentY, 18, LIGHTGRAY);
         currentY += lineHeight;
         
@@ -123,8 +124,8 @@ void TUI::renderInfoPanel(const World& world, const Unit* selectedUnit, int curr
         // currentY += lineHeight;
         
         DrawText(TextFormat("Movement: %d", 
-                selectedUnit->getMovement()),
-                panelX, currentY, 18, selectedUnit->canMove() ? GREEN : RED);
+                unit->getMovement()),
+                panelX, currentY, 18, unit->canMove() ? GREEN : RED);
         currentY += lineHeight;
     } else {
         DrawText("No unit selected", panelX, currentY, 18, GRAY);

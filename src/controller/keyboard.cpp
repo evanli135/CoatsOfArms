@@ -1,7 +1,6 @@
 #include "controller/keyboard.h"
+#include "controller/error.h"
 #include <stdexcept>
-
-namespace polytopia {
 
 KeyboardController::KeyboardController(World& model, const Player& player)
     : model(model),
@@ -15,32 +14,32 @@ void KeyboardController::go() {
     myTurn = true;
 }
 
-std::optional<PlayerError> KeyboardController::action(PlayerAction playerAction) {
+std::optional<PlayerError> KeyboardController::applyKeyboardAction(KeyboardAction keyboardAction) {
     if (!myTurn) {
         return PlayerError::OUTOFTURN;
     }
 
-    switch (playerAction) {
-        case PlayerAction::LEFT:
+    switch (keyboardAction) {
+        case KeyboardAction::LEFT:
             return moveHover(0, -1);
 
-        case PlayerAction::RIGHT:
+        case KeyboardAction::RIGHT:
             return moveHover(0, 1);
 
-        case PlayerAction::DOWN:
+        case KeyboardAction::DOWN:
             return moveHover(1, 0);
 
-        case PlayerAction::UP:
+        case KeyboardAction::UP:
             return moveHover(-1, 0);
 
-        case PlayerAction::SELECT:
+        case KeyboardAction::SELECT:
             return selectCell();
         
-        case PlayerAction::UNSELECT:
+        case KeyboardAction::UNSELECT:
             selectedPosition = std::nullopt;
             return std::nullopt;
 
-        case PlayerAction::CONFIRM:
+        case KeyboardAction::CONFIRM:
             endTurn();
             model.nextTurn();
             return std::nullopt;
@@ -53,7 +52,7 @@ std::optional<PlayerError> KeyboardController::action(PlayerAction playerAction)
 void KeyboardController::onModelChanged(ModelEvent event) {
     switch (event) {
         case ModelEvent::TURN_CHANGE:
-            if (model.getCurrentPlayer().id() == player.id()) {
+            if (model.getCurrentPlayer().getId() == player.getId()) {
                 go();
             }
             break;
@@ -63,7 +62,7 @@ void KeyboardController::onModelChanged(ModelEvent event) {
 }
 
 bool KeyboardController::myPlayer(const Unit& unit) const {
-    return unit.getPlayer().id() == player.id();
+    return unit.getOwner().getId() == player.getId();
 }
 
 std::optional<PlayerError> KeyboardController::moveHover(int dRow, int dCol) {
@@ -119,25 +118,44 @@ std::optional<PlayerError> KeyboardController::selectCell() {
 
     const Unit& oldUnit = oldTile.getUnit().value();
 
+    std::optional<PlayerError> result;
+
     // Target tile has a unit - handle combat or friendly selection
     if (newTile.hasUnit()) {
         const Unit& newUnit = newTile.getUnit().value();
 
-        // Trying to attack friendly unit
+        // Trying to attack friendly unit (prob for heal, buff, etc)
         if (myPlayer(newUnit)) {
             return PlayerError::NOTSUPPORTED;
         }
         
         // Attack enemy unit
-        model.battle(oldPos, newPos);
-        selectedPosition = std::nullopt;
-        return std::nullopt;
+        result = model.applyControllerRequest(
+            ControllerRequest(
+                ControllerAction::ATT,
+                oldPos,
+                newPos,
+                player
+            )
+        );
+        
+        if (!result.has_value()) {
+            selectedPosition = std::nullopt;
+        }
+        return result;
     }
 
     // Target tile is empty - move unit
-    model.moveUnit(oldPos, newPos);
-    selectedPosition = std::nullopt;
-    return std::nullopt;
+    result = model.applyControllerRequest(
+            ControllerRequest(
+                ControllerAction::MOV,
+                oldPos,
+                newPos,
+                player
+            )
+        );
+    if (!result.has_value()) {
+        selectedPosition = std::nullopt;
+    }
+    return result;
 }
-
-} // namespace polytopia

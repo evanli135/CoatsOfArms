@@ -3,6 +3,7 @@
 #include "raylib.h"
 #include "model/world.h"
 #include "model/unit.h"
+#include "controller/error.h"
 
 
 
@@ -13,7 +14,7 @@ public:
     void render(
         const World& world,
         const Position& cursor,
-        const Unit* selectedUnit,
+        std::optional<const Unit*> selectedUnit,
         int currentPlayer
     );
 
@@ -25,8 +26,9 @@ private:
 
     void renderGrid(const World& world, const Position& cursor);
     void renderCell(const World& world, const Position& pos, bool isCursor);
-    void renderInfoPanel(const World& world, const Unit* selectedUnit, int currentPlayer);
+    void renderInfoPanel(const World& world, std::optional<const Unit*> selectedUnit, int currentPlayer);
     void renderControls();
+    void renderError(const PlayerError error);
 
     Color getPlayerColor(int playerId) const;
     const char* getUnitEmoji(UnitType type) const;
