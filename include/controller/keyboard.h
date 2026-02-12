@@ -61,4 +61,7 @@ private:
     void endTurn();
     std::optional<PlayerError> selectCell();
     // std::optional<PlayerError> applyControllerAction(ControllerAction action);
+
 };
+
+std::optional<KeyboardAction> pollKeyboardAction();

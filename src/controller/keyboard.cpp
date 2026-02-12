@@ -1,6 +1,10 @@
 #include "controller/keyboard.h"
 #include "controller/error.h"
 #include "model/world.h"
+
+#include <iostream>
+#include "raylib.h"
+
 #include <stdexcept>
 
 KeyboardController::KeyboardController(World& model, const Player& player)
@@ -164,4 +168,68 @@ bool KeyboardController::myPlayer(const Unit& unit) const {
 
 bool KeyboardController::myPlayer(const Unit* unit) const {
     { return unit->getOwner().getId() == player.getId(); }
+}
+
+std::optional<KeyboardAction> pollKeyboardAction() {
+    static float keyRepeatTimer = 0.0f;
+    static float repeatDelay = 0.3f;      // Initial delay before repeat starts
+    static float repeatInterval = 0.05f;  // Time between repeats
+    static bool isRepeating = false;
+    
+    float deltaTime = GetFrameTime();
+    
+    // Check for initial press (highest priority)
+    if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) {
+        keyRepeatTimer = 0.0f;
+        isRepeating = false;
+        return KeyboardAction::LEFT;
+    }
+    if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) {
+        keyRepeatTimer = 0.0f;
+        isRepeating = false;
+        return KeyboardAction::RIGHT;
+    }
+    if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
+        keyRepeatTimer = 0.0f;
+        isRepeating = false;
+        return KeyboardAction::UP;
+    }
+    if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) {
+        keyRepeatTimer = 0.0f;
+        isRepeating = false;
+        return KeyboardAction::DOWN;
+    }
+    
+    // Check for held keys (with repeat)
+    bool keyHeld = IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A) ||
+                   IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D) ||
+                   IsKeyDown(KEY_UP) || IsKeyDown(KEY_W) ||
+                   IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S);
+    
+    if (keyHeld) {
+        keyRepeatTimer += deltaTime;
+        
+        float threshold = isRepeating ? repeatInterval : repeatDelay;
+        
+        if (keyRepeatTimer >= threshold) {
+            keyRepeatTimer = 0.0f;
+            isRepeating = true;
+            
+            // Return the held direction
+            if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A)) return KeyboardAction::LEFT;
+            if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) return KeyboardAction::RIGHT;
+            if (IsKeyDown(KEY_UP) || IsKeyDown(KEY_W)) return KeyboardAction::UP;
+            if (IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S)) return KeyboardAction::DOWN;
+        }
+    } else {
+        keyRepeatTimer = 0.0f;
+        isRepeating = false;
+    }
+    
+    // Non-repeating keys
+    if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) return KeyboardAction::SELECT;
+    if (IsKeyPressed(KEY_BACKSPACE) || IsKeyPressed(KEY_TAB)) return KeyboardAction::UNSELECT;
+    if (IsKeyPressed(KEY_LEFT_SHIFT)) return KeyboardAction::CONFIRM;
+    
+    return std::nullopt;
 }

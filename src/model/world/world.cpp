@@ -11,6 +11,9 @@ void printCurrentPlayer(const World& world) {
     std::cout << "Current Player: " << currentPlayer.getId() << "\n";
 }
 
+int getDistance(const Position& from, const Position& to) {
+    return std::max(std::abs(to.row() - from.row()), std::abs(to.col() - from.col()));
+}
 
 World::World(std::vector<Player> players) 
     : map(Game::HEIGHT, std::vector<Tile>(Game::WIDTH, Tile())),
@@ -60,7 +63,7 @@ bool World::canMove(const Position& from, const Position& to) {
     }
     
     // Further movement logic can be implemented here
-    return true;
+    return getDistance(from, to) <= getUnitAt(from)->getMovement();
 }
 
 void World::nextTurn() {
@@ -110,6 +113,10 @@ std::optional<PlayerError> World::applyControllerRequest(ControllerRequest actio
                 throw InternalError::UNITABSENCE;
             }
 
+            if (getUnitAt(origin)->canMove() == false) {
+                return PlayerError::UNITCANTMOVE;
+            }
+
             // If destination is traversable
             if (!getTileAt(destination).isWalkable()) {
                 return PlayerError::UNTRAVERSABLECELL;
@@ -128,6 +135,10 @@ std::optional<PlayerError> World::applyControllerRequest(ControllerRequest actio
             // If there is a friendly at origin
             if (!hasUnitAt(origin) || !getCopyAt(origin).value().sameOwner(action.getPlayer())) {
                 throw InternalError::UNITABSENCE;
+            }
+
+            if (getUnitAt(origin)->canMove() == false) {
+                return PlayerError::UNITCANTMOVE;
             }
 
             // If there is an enemy at destination
@@ -171,12 +182,8 @@ bool World::canAttack(const Position& from, const Position& to) {
         return false;
     }
     
-    // Calculate Manhattan distance
-    int distance = std::abs(to.row() - from.row()) + std::abs(to.col() - from.col());
-    
-    // Basic range check - units can attack adjacent tiles (range 1)
     // TODO: Get actual attack range from unit stats
-    return distance <= getUnitAt(from)->getRange();
+    return getDistance(from, to) <= getUnitAt(from)->getRange() + getUnitAt(from)->getMovement();
 }
 
 // INCOMPL
@@ -187,7 +194,6 @@ void World::battle(const Position& attackerPos, const Position& defenderPos) {
     if (!attackerTile.hasUnit() || !defenderTile.hasUnit()) {
         throw std::logic_error("Battle requires units at both positions");
     }
-    
 }
 
 void World::addUnit(const Position& pos, const Unit& unit) {

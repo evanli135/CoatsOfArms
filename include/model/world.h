@@ -19,6 +19,7 @@ public:
     World(std::vector<Player> players);
     ~World() = default;
 
+    int getTurn() const { return turn; }
     const Unit* getUnitAt(const Position& pos) const;
     const std::optional<Unit> getCopyAt(const Position& pos) const;
 

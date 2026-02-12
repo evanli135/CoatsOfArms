@@ -3,6 +3,7 @@
 enum class PlayerError {
     OUTOFBOUNDS,
     OUTOFTURN,
+    UNITCANTMOVE,
     OUTOFREACH,
     NOTSUPPORTED,
     INVALIDTARGET,
@@ -23,6 +24,8 @@ inline std::string playerErrorToString(PlayerError error) {
             return "Invalid target";
         case PlayerError::UNTRAVERSABLECELL:
             return "Untraversable cell";
+        case PlayerError::UNITCANTMOVE:
+            return "Unit cannot move";
     }
 
     // Defensive fallback — should never hit unless enum expands

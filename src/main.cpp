@@ -3,22 +3,9 @@
 #include "model/util.h"
 #include "model/world.h"
 #include "controller/error.h"
-
 #include "controller/keyboard.h"
-
 #include "view/tui.h"
 
-
-std::optional<KeyboardAction> pollKeyboardAction() {
-    if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A))   return KeyboardAction::LEFT;
-    if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D))  return KeyboardAction::RIGHT;
-    if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W))     return KeyboardAction::UP;
-    if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S))   return KeyboardAction::DOWN;
-    if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) return KeyboardAction::SELECT;
-    if (IsKeyPressed(KEY_BACKSPACE) || IsKeyPressed(KEY_TAB))   return KeyboardAction::UNSELECT;
-    if (IsKeyPressed(KEY_LEFT_SHIFT))                             return KeyboardAction::CONFIRM;
-    return std::nullopt;
-};
 
 int main() {
     // SetConfigFlags(FLAG_WINDOW_UNDECORATED);

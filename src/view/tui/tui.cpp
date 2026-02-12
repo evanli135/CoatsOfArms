@@ -32,11 +32,13 @@ void TUI::render(
     ClearBackground(Color{20, 20, 30, 255});
     
     // Title
-    DrawText("POLYTOPIA CLONE", screenWidth / 2 - 150, 50, 32, RAYWHITE);
+    DrawText("REV ROYALE", screenWidth / 2 - 150, 50, 32, RAYWHITE);
 
     // Current player indicator
     Color playerColor = getPlayerColor(currentPlayer);
     DrawText(TextFormat("Player %d's Turn", currentPlayer), screenWidth / 2 - 80, 80, 20, playerColor);
+
+    DrawText(TextFormat("Turn: %d", world.getTurn()), screenWidth / 2 - 80, 100, 20, Color{200, 200, 200, 150});
 
     const Unit* selectedUnit = nullptr;
     if (selectedPosition != nullptr) {
