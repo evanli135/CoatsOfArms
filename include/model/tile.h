@@ -1,8 +1,8 @@
 #pragma once
 #include <optional>
 
-#include "include/model/util.h"
-#include "include/model/unit.h"
+#include "model/util.h"
+#include "model/unit.h"
 
 enum class TileModifier {
     ONFIRE

@@ -2,14 +2,10 @@ $RAYLIB = "C:/raylib/raylib"
 $COMPILER = "C:/raylib/w64devkit/bin/g++"
 
 $SRC = @(
-    "src/main.cpp"
-    # "src/model/world.cpp",
-    # "src/model/tile.cpp",
-    # "src/model/unit.cpp",
-    # "src/model/player.cpp",
-    # "src/view/tui.cpp",
-    # "src/controller/game.cpp",
-    # "src/controller/input_handler.cpp"
+    "src/main.cpp",
+    "src/model/world/world.cpp",
+    "src/view/tui/tui.cpp",
+    "src/controller/keyboard.cpp" 
 )
 
 $OUT = "bin/revroyale.exe"

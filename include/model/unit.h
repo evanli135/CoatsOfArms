@@ -1,6 +1,13 @@
+#pragma once
+
 #include <map>
-#include <player.h>
+#include <model/player.h>
 #include <stdexcept>
+
+enum class UnitType {
+    Warrior,
+    Archer
+};
 
 /**
  * Status Effects 
@@ -31,11 +38,12 @@ public:
         : 
         type(type),
         player(player),
-        health(maxHealth)
-        , maxHealth(maxHealth)
-        , dmg(dmg)
-        , mov(mov)
-        , range(range) {}
+        health(maxHealth),
+        maxHealth(maxHealth),
+        dmg(dmg),
+        mov(mov), 
+        range(range), 
+        moved(false) {}
 
     bool isAlive() const { return health > 0; }
     
@@ -46,9 +54,13 @@ public:
     int getRange() const { return range; }
     const Player& getOwner() const { return player; }
     UnitType getType() const { return type; }
-    bool canMove() const;
 
-    bool sameOwner(Player& player) {return this->player.getId() == player.getId(); }
+    bool canMove() const { return !moved; }
+
+    void setMoved(bool flag) { moved = flag; }
+
+    bool sameOwner(Player& player)  const {return this->player.getId() == player.getId(); }
+    bool sameOwner(Player player) const {return this->player.getId() == player.getId(); }
 
     void raiseHP(int amount) {
         if (amount < 0) throw std::invalid_argument("Amount must be non-negative");
@@ -67,20 +79,15 @@ private:
     int dmg;
     int mov;
     int range;
+    bool moved;
     UnitType type;
     Player player;
-};
-
-
-enum class UnitType {
-    Warrior,
-    Archer
 };
 
 class UnitFactory {
 public:
     static Unit create(UnitType type, Player player) {
-        int id = nextId++;
+        // int id = nextId++;
         switch (type) {
             case UnitType::Warrior:
                 return createWarrior(player);
@@ -92,7 +99,7 @@ public:
     }
 
 private:
-    static int nextId;
+    // static int nextId;
     
     static Unit createWarrior(Player player) {
         return Unit(UnitType::Warrior, player, 100, 20, 2, 1);

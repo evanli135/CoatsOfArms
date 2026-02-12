@@ -2,44 +2,15 @@
 
 #include <map>
 #include <optional>
+#include "controller/action.h"
+#include "controller/observer.h"
 #include "model/util.h"
-#include "model/world.h"
 #include "model/error.h"
-#include "observer.h"
-#include "model/player.h"
+#include "controller/error.h"
 
-enum class KeyboardAction {
-    LEFT,
-    RIGHT,
-    UP,
-    DOWN,
-    SELECT,
-    UNSELECT,
-    CONFIRM
-};
-
-enum class ControllerAction {
-    MOV,
-    ATT
-};
-
-
-struct ControllerRequest {
-private:
-    ControllerAction action;
-    Position origin;
-    Position destination;
-    Player player;
-
-public:
-    ControllerAction getAction() { return action; }
-    Position getOrigin() { return origin; }
-    Position getDestination() { return destination; }
-    Player getPlayer() { return player; }
-
-    ControllerRequest(ControllerAction action, Position origin, Position destination, Player player)
-     : action(action), origin(origin), destination(destination), player(player) {}
-};
+class World;
+class Player;
+class Unit;
 
 class KeyState {
 public:
@@ -85,6 +56,7 @@ private:
     
     // Helper methods
     bool myPlayer(const Unit& unit) const;
+    bool myPlayer(const Unit* unit) const;
     std::optional<PlayerError> moveHover(int dRow, int dCol);
     void endTurn();
     std::optional<PlayerError> selectCell();

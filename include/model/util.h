@@ -1,8 +1,11 @@
+#pragma once
+
 #include <stdexcept>
 
 namespace Game {
     inline constexpr int WIDTH = 16;
     inline constexpr int HEIGHT = 16;
+    inline constexpr int SIZE = 16;
 }
 
 /**
@@ -69,4 +72,13 @@ public:
     }
 
     bool operator!=(const Position& other) const { return !(*this == other); }
+};
+
+
+class RNG {
+
+};
+
+class SeededRNG : RNG {
+
 };

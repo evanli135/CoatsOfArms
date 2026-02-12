@@ -1,5 +1,6 @@
 #include "controller/keyboard.h"
 #include "controller/error.h"
+#include "model/world.h"
 #include <stdexcept>
 
 KeyboardController::KeyboardController(World& model, const Player& player)
@@ -61,10 +62,6 @@ void KeyboardController::onModelChanged(ModelEvent event) {
     }
 }
 
-bool KeyboardController::myPlayer(const Unit& unit) const {
-    return unit.getOwner().getId() == player.getId();
-}
-
 std::optional<PlayerError> KeyboardController::moveHover(int dRow, int dCol) {
     try {
         hoverPosition.move(dRow, dCol);
@@ -88,7 +85,8 @@ std::optional<PlayerError> KeyboardController::selectCell() {
             return PlayerError::INVALIDTARGET;
         }
         
-        const Unit& unit = model.getUnitAt(hoverPosition).value();
+        const Unit* unit = model.getUnitAt(hoverPosition);
+
         if (!myPlayer(unit)) {
             return PlayerError::INVALIDTARGET;
         }
@@ -158,4 +156,12 @@ std::optional<PlayerError> KeyboardController::selectCell() {
         selectedPosition = std::nullopt;
     }
     return result;
+}
+
+bool KeyboardController::myPlayer(const Unit& unit) const {
+    { return unit.getOwner().getId() == player.getId(); }
+}
+
+bool KeyboardController::myPlayer(const Unit* unit) const {
+    { return unit->getOwner().getId() == player.getId(); }
 }

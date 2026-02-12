@@ -14,24 +14,30 @@ public:
     void render(
         const World& world,
         const Position& cursor,
-        std::optional<const Unit*> selectedUnit,
-        int currentPlayer
-    );
+        const Position* selectedPosition
+        );
+
+    void setError(const PlayerError error);
+    void clearError();
 
 private:
     int screenWidth, screenHeight;
     int fontSize = 24;
     int cellWidth, cellHeight;
     int gridOffsetX, gridOffsetY;
+    int totalGridWidth, totalGridHeight;
 
-    void renderGrid(const World& world, const Position& cursor);
-    void renderCell(const World& world, const Position& pos, bool isCursor);
-    void renderInfoPanel(const World& world, std::optional<const Unit*> selectedUnit, int currentPlayer);
+    std::optional<PlayerError> currentError;
+
+    void renderGrid(const World& world, const Position& cursor, const Position* selectedPosition);
+    void renderCell(const World& world, const Position& pos, bool isCursor, bool isSelected);
+    void renderInfoPanel(const World& world, const Unit* selectedUnit, int currentPlayer);
     void renderControls();
-    void renderError(const PlayerError error);
+    void renderError();
 
+    Color getUnitColor(const Unit* unit) const;
     Color getPlayerColor(int playerId) const;
-    const char* getUnitEmoji(UnitType type) const;
-    const char* getTerrainChar(Terrain terraint) const;
+    const char* getUnitSymbol(UnitType type) const;
+    const char* getTerrainChar(Terrain terrain) const;
     Color getTerrainColor(Terrain terrain) const;
 };
