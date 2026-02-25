@@ -139,7 +139,7 @@ void TUI::renderInfoPanel(const World& world, const Unit* selectedUnit, int curr
         // Unit type with emoji
         const char* emoji = getUnitSymbol(selectedUnit->getType());
         DrawText(TextFormat("%s %s", emoji, 
-                selectedUnit->getType() == UnitType::Warrior ? "Warrior" : "Archer"),
+                selectedUnit->getType() == UnitType::WARRIOR ? "Warrior" : "Archer"),
                 panelX, currentY, 20, unitColor);
         currentY += lineHeight;
         
@@ -249,9 +249,12 @@ Color TUI::getUnitColor(const Unit* unit) const {
 
 const char* TUI::getUnitSymbol(UnitType type) const {
     switch (type) {
-        case UnitType::Warrior: return "x";   // Crossed swords
-        case UnitType::Archer:  return ">";  // Bow and arrow
-        default: return "!";
+        case UnitType::WARRIOR: return "x";   // Crossed swords
+        case UnitType::RANGER:  return ">";
+        case UnitType::SCOUT:   return "^";
+        case UnitType::CAVALRY: return "!";
+        case UnitType::MAGE:    return "*";
+        default: return "?";
     }
 }
 
@@ -260,7 +263,7 @@ const char* TUI::getTerrainChar(Terrain terrain) const {
         case Terrain::GRASS:    return "grs";
         case Terrain::FOREST:   return "for";
         case Terrain::MOUNTAIN: return "mnt";
-        case Terrain::WATER:    return "wtr";
+        case Terrain::OCEAN:    return "wtr";
         default: return "?";
     }
 }
@@ -270,7 +273,7 @@ Color TUI::getTerrainColor(Terrain terrain) const {
         case Terrain::GRASS:    return Color{60, 120, 50, 255};    // Green
         case Terrain::FOREST:   return Color{40, 90, 35, 255};     // Dark green
         case Terrain::MOUNTAIN: return Color{100, 100, 110, 255};  // Gray
-        case Terrain::WATER:    return Color{50, 100, 180, 255};   // Blue
+        case Terrain::OCEAN:    return Color{50, 100, 180, 255};   // Blue
         default: return GRAY;
     }
 }

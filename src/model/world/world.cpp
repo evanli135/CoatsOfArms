@@ -18,15 +18,16 @@ int getDistance(const Position& from, const Position& to) {
 World::World(std::vector<Player> players) 
     : map(Game::HEIGHT, std::vector<Tile>(Game::WIDTH, Tile())),
       players(players),
-      currentPlayerIndex(0),
-      units(std::map<int, std::vector<Unit*>>()) {
+      currentPlayerIndex(0)
+    //   units(std::map<int, std::vector<Unit*>>())
+       {
         if (players.size() < 2) {
             throw std::logic_error("Not enough players\n");
         }
         
-        for (auto &player : players) {
-            units[player.getId()] = std::vector<Unit*>();
-        }
+        // for (auto &player : players) {
+        //     units[player.getId()] = std::vector<Unit*>();
+        // }
       }
 
 const Unit* World::getUnitAt(const Position& pos) const {
@@ -68,10 +69,20 @@ bool World::canMove(const Position& from, const Position& to) {
 
 void World::nextTurn() {
     turn++;
+
     currentPlayerIndex = (currentPlayerIndex + 1) % players.size();   
 
-    for (auto& unitPtr : units[players[currentPlayerIndex].getId()]) {
-        unitPtr->setMoved(false);
+    int currentPlayerId = players[currentPlayerIndex].getId();
+    for (int row = 0; row < Game::HEIGHT; row++) {
+        for (int col = 0; col < Game::WIDTH; col++) {
+            Position pos(row, col);
+            if (hasUnitAt(pos)) {
+                Unit& unit = getTileAt(pos).getUnit().value();
+                if (unit.getOwner().getId() == currentPlayerId) {
+                    unit.setMoved(false);
+                }
+            }
+        }
     }
 
     printCurrentPlayer(*this);
@@ -206,19 +217,21 @@ void World::addUnit(const Position& pos, const Unit& unit) {
     }
 
     getTileAt(pos).placeUnit(unit);
-    units[unit.getOwner().getId()].push_back(&getTileAt(pos).getUnit().value());
+    // units[unit.getOwner().getId()].push_back(&getTileAt(pos).getUnit().value());
 }
 
 
 int Logic::stepCost(const Unit& unit, const Tile& tile) {
     switch (tile.getTerrain()) {
-        case GRASS:
+        case Terrain::GRASS:
             return 1;
-        case FOREST:
+        case Terrain::FOREST:
             return 2;
-        case WATER:
+        case Terrain::RIVER:
+            return 4;
+        case Terrain::OCEAN:
             return 999; // Impassable
-        case MOUNTAIN:
+        case Terrain::MOUNTAIN:
             return 3;
         default:
             return 1;
@@ -231,8 +244,8 @@ World WorldFactory::create(WorldLayout layout, std::vector<Player> players) {
 
     switch (layout) {
         case WorldLayout::BASIC:
-            world.getTileAt(Position(0, 0)).placeUnit(UnitFactory::create(UnitType::Warrior, players[0]));
-            world.getTileAt(Position(Game::WIDTH - 1, Game::HEIGHT - 1)).placeUnit(UnitFactory::create(UnitType::Warrior, players[1]));
+            world.getTileAt(Position(0, 0)).placeUnit(UnitFactory::create(UnitType::WARRIOR, players[0]));
+            world.getTileAt(Position(Game::WIDTH - 1, Game::HEIGHT - 1)).placeUnit(UnitFactory::create(UnitType::WARRIOR, players[1]));
             break;
         case WorldLayout::EMPTY:
             // No units placed

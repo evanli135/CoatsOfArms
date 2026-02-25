@@ -5,8 +5,11 @@
 #include <stdexcept>
 
 enum class UnitType {
-    Warrior,
-    Archer
+    WARRIOR,
+    SCOUT,
+    RANGER,
+    CAVALRY,
+    MAGE
 };
 
 /**
@@ -89,10 +92,16 @@ public:
     static Unit create(UnitType type, Player player) {
         // int id = nextId++;
         switch (type) {
-            case UnitType::Warrior:
+            case UnitType::WARRIOR:
                 return createWarrior(player);
-            case UnitType::Archer:
-                return createArcher(player);
+            case UnitType::SCOUT:
+                return createScout(player);
+            case UnitType::RANGER:
+                return createRanger(player);
+            case UnitType::CAVALRY:
+                return createCavalry(player);
+            case UnitType::MAGE:
+                return createMage(player);
             default:
                 throw std::invalid_argument("Unknown UnitType");
         }
@@ -102,10 +111,22 @@ private:
     // static int nextId;
     
     static Unit createWarrior(Player player) {
-        return Unit(UnitType::Warrior, player, 100, 20, 2, 1);
+        return Unit(UnitType::WARRIOR, player, 100, 20, 2, 1);
     }
 
-    static Unit createArcher(Player player) {
-        return Unit(UnitType::Archer, player, 75, 15, 2, 3);
+    static Unit createRanger(Player player) {
+        return Unit(UnitType::RANGER, player, 75, 15, 2, 2);
+    }
+
+    static Unit createScout(Player player) {
+        return Unit(UnitType::SCOUT, player, 50, 10, 3, 1);
+    }
+
+    static Unit createCavalry(Player player) {
+        return Unit(UnitType::CAVALRY, player, 80, 25, 4, 1);
+    }
+
+    static Unit createMage(Player player) {
+        return Unit(UnitType::MAGE, player, 60, 30, 2, 2);
     }
 };

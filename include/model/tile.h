@@ -1,64 +1,74 @@
 #pragma once
 #include <optional>
+#include <unordered_map>
 
 #include "model/util.h"
 #include "model/unit.h"
+#include "model/economy.h"
+#include "model/city.h"
 
 enum class TileModifier {
     ONFIRE
 };
 
-enum Terrain {
+enum class Terrain {
     GRASS,
     FOREST,
-    WATER,
-    MOUNTAIN
+    RIVER,
+    OCEAN,
+    MOUNTAIN,
 };
 
 
 class Tile {
-    public:
-        // Tile() : terrain(Probability::roll(75.0f) ? GRASS : FOREST) {}
-        Tile() : terrain(GRASS) {}
-        Tile(Terrain t) : terrain(t) {}
+public:
+    // Tile() : terrain(Probability::roll(75.0f) ? GRASS : FOREST) {}
+    Tile() : terrain(Terrain::GRASS) {}
+    Tile(Terrain t) : terrain(t) {}
+    Tile(City city) : terrain(Terrain::GRASS), city(city) {}
+    Tile(Terrain t, City city) : terrain(t), city(city) {}
 
-        const std::optional<Unit>& getUnit() const {
-            return unit;
-        }
 
-        std::optional<Unit>& getUnit() {
-            return unit;
-        }
+    const std::optional<Unit>& getUnit() const {
+        return unit;
+    }
 
-        Terrain getTerrain() const {
-            return terrain;
-        }
+    std::optional<Unit>& getUnit() {
+        return unit;
+    }
 
-        bool hasUnit() const {
-            return unit.has_value();
-        }
+    Terrain getTerrain() const {
+        return terrain;
+    }
 
-        bool isWalkable() const {
-            return terrain != WATER && !unit.has_value();
-        }
+    bool hasUnit() const {
+        return unit.has_value();
+    }
 
-        void placeUnit(const Unit& u) {
-            unit = u;
-        }
+    bool isWalkable() const {
+        return terrain != Terrain::OCEAN && !unit.has_value();
+    }
 
-        void setTerrain(Terrain t) {
-            terrain = t;
-        }
+    void placeUnit(const Unit& u) {
+        unit = u;
+    }
 
-        const std::optional<Unit> removeUnit() {
-            auto u = unit;
-            unit.reset();
-            return u;
-        }
-        
+    void setTerrain(Terrain t) {
+        terrain = t;
+    }
+
+    const std::optional<Unit> removeUnit() {
+        auto u = unit;
+        unit.reset();
+        return u;
+    }
+
+    bool hasCity() const { return city.has_value(); }
+    
 
 private:
     Terrain terrain;
     std::optional<Unit> unit;
+    std::unordered_map<BuildingType, bool> buildings;
+    std::optional<City> city;
 };
-

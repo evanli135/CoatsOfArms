@@ -49,7 +49,7 @@ private:
     std::vector<std::vector<Tile>> map;
     std::vector<Player> players;
 
-    std::map<int, std::vector<Unit*>> units;
+    // std::map<int, std::vector<Unit*>> units;
 
     int currentPlayerIndex = 0;
 
