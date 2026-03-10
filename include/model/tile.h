@@ -29,11 +29,11 @@ public:
     Tile(Terrain t, City city) : terrain(t), city(city) {}
 
 
-    const std::optional<Unit>& getUnit() const {
+    const std::optional<UnitId>& getUnit() const {
         return unit;
     }
 
-    std::optional<Unit>& getUnit() {
+    std::optional<UnitId>& getUnit() {
         return unit;
     }
 
@@ -50,14 +50,18 @@ public:
     }
 
     void placeUnit(const Unit& u) {
-        unit = u;
+        unit = u.getId();
+    }
+
+    void placeUnit(UnitId id) {
+        unit = id;
     }
 
     void setTerrain(Terrain t) {
         terrain = t;
     }
 
-    const std::optional<Unit> removeUnit() {
+    const std::optional<UnitId> removeUnit() {
         auto u = unit;
         unit.reset();
         return u;
@@ -68,7 +72,7 @@ public:
 
 private:
     Terrain terrain;
-    std::optional<Unit> unit;
+    std::optional<UnitId> unit;
     std::unordered_map<BuildingType, bool> buildings;
     std::optional<City> city;
 };

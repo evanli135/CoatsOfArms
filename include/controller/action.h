@@ -10,13 +10,21 @@ enum class KeyboardAction {
     DOWN,
     SELECT,
     UNSELECT,
-    CONFIRM
+    CONFIRM,
+    NUM_1,
+    NUM_2,
+    NUM_3,
+    NUM_4
 };
+
 
 enum class ControllerAction {
     MOV,
-    ATT
+    ATT,
+    CON,
+    TRN
 };
+
 
 struct ControllerRequest {
     ControllerAction action;

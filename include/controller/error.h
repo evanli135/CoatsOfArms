@@ -7,7 +7,8 @@ enum class PlayerError {
     OUTOFREACH,
     NOTSUPPORTED,
     INVALIDTARGET,
-    UNTRAVERSABLECELL
+    UNTRAVERSABLECELL,
+    NOAVAILABLEFOUNDRY
 };
 
 inline std::string playerErrorToString(PlayerError error) {

@@ -13,6 +13,7 @@ enum class Slot {
     RANGER,
     CAVALRY,
     MAGE,
+    OTHER,
 };
 
 enum class Blessing {

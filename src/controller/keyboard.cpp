@@ -13,7 +13,8 @@ KeyboardController::KeyboardController(World& model, const Player& player)
       hoverPosition(0, 0),
       myTurn(false),
       repeatDelay(0.25f),
-      repeatInterval(0.1f) {}
+      repeatInterval(0.1f),
+      waitingForActionInput(false) {}
 
 void KeyboardController::go() {
     myTurn = true;
@@ -22,6 +23,36 @@ void KeyboardController::go() {
 std::optional<PlayerError> KeyboardController::applyKeyboardAction(KeyboardAction keyboardAction) {
     if (!myTurn) {
         return PlayerError::OUTOFTURN;
+    }
+
+    if (waitingForActionInput) {
+        if (!selectedPosition.has_value()) { throw std::logic_error("No cell selected for action"); }
+
+        Tile tile = model.getTileAt(selectedPosition.value());
+
+        if (tile.hasUnit() && tile.getUnit()->sameOwner(player)) {
+            if (keyboardAction == KeyboardAction::NUM_1) {
+                pendingAction = ControllerAction::MOV;
+            } else if (keyboardAction == KeyboardAction::NUM_2) {
+                pendingAction = ControllerAction::ATT;
+            } else {
+                return PlayerError::NOTSUPPORTED;
+            }
+
+            pendingAction = ControllerAction::MOV;
+        } else if (tile.hasUnit() && !tile.getUnit()->sameOwner(player)) {
+            return PlayerError::INVALIDTARGET;
+        } else if (tile.hasCity()) {
+            if (keyboardAction == KeyboardAction::NUM_1) {
+                pendingAction = ControllerAction::CON;
+            } else if (keyboardAction == KeyboardAction::NUM_2) {
+                pendingAction = ControllerAction::TRN;
+            }
+        } else {
+            if (keyboardAction == KeyboardAction::NUM_1) {
+                pendingAction = ControllerAction::CON;
+            }
+        }
     }
 
     switch (keyboardAction) {
@@ -83,83 +114,39 @@ void KeyboardController::endTurn() {
 }
 
 std::optional<PlayerError> KeyboardController::selectCell() {
-    // No unit selected yet - try to select one
-    if (!selectedPosition.has_value()) {
-        if (!model.hasUnitAt(hoverPosition)) {
-            return PlayerError::INVALIDTARGET;
-        }
-        
-        const Unit* unit = model.getUnitAt(hoverPosition);
+    if (!pendingAction.has_value()) {
+        Tile tile = model.getTileAt(hoverPosition);
 
-        if (!myPlayer(unit)) {
-            return PlayerError::INVALIDTARGET;
+        if (tile.hasUnit()) {
+            if (!tile.getUnit()->isAlive()) { throw std::logic_error("Unit is dead"); }
+            if (tile.getUnit()->sameOwner(player)) { return PlayerError::INVALIDTARGET; } 
+
+            waitingForActionInput = true;
+            selectedPosition = hoverPosition;
+            return std::nullopt;
         }
 
-        selectedPosition = hoverPosition;
+        else if (tile.hasCity()) {
+            waitingForActionInput = true;
+            selectedPosition = hoverPosition;
+            return std::nullopt;
+
+        } else {
+            waitingForActionInput = true;
+            selectedPosition = hoverPosition;
+            return std::nullopt;
+
+        }
+
+
         return std::nullopt;
     }
-    
-    // Unit already selected - handle move/attack/deselect
-    Position oldPos = selectedPosition.value();
-    Position newPos = hoverPosition;
 
-    // Clicking same position - deselect
-    if (oldPos == newPos) {
-        selectedPosition = std::nullopt;
-        return std::nullopt;
-    }
+    Tile origin = model.getTileAt(selectedPosition.value());
+    Tile destination = model.getTileAt(hoverPosition);
+    ControllerAction action = pendingAction.value();
 
-    Tile& oldTile = model.getTileAt(oldPos);
-    Tile& newTile = model.getTileAt(newPos);
-
-    // Source tile should have a unit
-    if (!oldTile.hasUnit()) {
-        selectedPosition = std::nullopt;
-        return PlayerError::INVALIDTARGET;
-    }
-
-    const Unit& oldUnit = oldTile.getUnit().value();
-
-    std::optional<PlayerError> result;
-
-    // Target tile has a unit - handle combat or friendly selection
-    if (newTile.hasUnit()) {
-        const Unit& newUnit = newTile.getUnit().value();
-
-        // Trying to attack friendly unit (prob for heal, buff, etc)
-        if (myPlayer(newUnit)) {
-            return PlayerError::NOTSUPPORTED;
-        }
-        
-        // Attack enemy unit
-        result = model.applyControllerRequest(
-            ControllerRequest(
-                ControllerAction::ATT,
-                oldPos,
-                newPos,
-                player
-            )
-        );
-        
-        if (!result.has_value()) {
-            selectedPosition = std::nullopt;
-        }
-        return result;
-    }
-
-    // Target tile is empty - move unit
-    result = model.applyControllerRequest(
-            ControllerRequest(
-                ControllerAction::MOV,
-                oldPos,
-                newPos,
-                player
-            )
-        );
-    if (!result.has_value()) {
-        selectedPosition = std::nullopt;
-    }
-    return result;
+    return model.applyControllerRequest(ControllerRequest(action, selectedPosition.value(), hoverPosition, player));
 }
 
 bool KeyboardController::myPlayer(const Unit& unit) const {

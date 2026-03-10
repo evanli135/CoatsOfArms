@@ -8,6 +8,7 @@
 #include "model/error.h"
 #include "controller/error.h"
 
+
 class World;
 class Player;
 class Unit;
@@ -42,6 +43,7 @@ public:
     const Position& getHoverPosition() const { return hoverPosition; }
     const std::optional<Position>& getSelectedPosition() const { return selectedPosition; }
     bool isMyTurn() const { return myTurn; }
+    const std::optional<ControllerAction>& getPendingAction() const { return pendingAction; }
 
 private:
     World& model;
@@ -59,9 +61,10 @@ private:
     bool myPlayer(const Unit* unit) const;
     std::optional<PlayerError> moveHover(int dRow, int dCol);
     void endTurn();
-    std::optional<PlayerError> selectCell();
-    // std::optional<PlayerError> applyControllerAction(ControllerAction action);
-
+    std::optional<PlayerError> selectCell();    
+    std::optional<PlayerError> applyControllerAction(ControllerAction action);
+    bool waitingForActionInput;
+    std::optional<ControllerAction> pendingAction;
 };
 
 std::optional<KeyboardAction> pollKeyboardAction();
