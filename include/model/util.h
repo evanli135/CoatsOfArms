@@ -1,8 +1,11 @@
+#pragma once
+
 #include <stdexcept>
 
 namespace Game {
     inline constexpr int WIDTH = 16;
     inline constexpr int HEIGHT = 16;
+    inline constexpr int SIZE = 16;
 }
 
 /**
@@ -69,4 +72,29 @@ public:
     }
 
     bool operator!=(const Position& other) const { return !(*this == other); }
+
+    int distanceFrom(const Position& other) const {
+        int dRow = std::abs(row() - other.row());
+        int dCol = std::abs(col() - other.col());
+        return std::max(dRow, dCol);
+    }
+};
+
+namespace std {
+    template<>
+    struct hash<Position> {
+        size_t operator()(const Position& pos) const {
+            // Combine row and column into single hash
+            return hash<int>()(pos.row()) ^ (hash<int>()(pos.col()) << 1);
+        }
+    };
+}
+
+
+class RNG {
+
+};
+
+class SeededRNG : RNG {
+
 };

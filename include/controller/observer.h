@@ -1,6 +1,7 @@
+#pragma once
 
 enum class ModelEvent {
-    TURN_CHANGE,
+    TURN_CHANGE
 };
 
 /**
@@ -14,4 +15,7 @@ public:
      * Notify the observer that the model has changed
      */
     virtual void onModelChanged(ModelEvent event) = 0;
+
+private:
 };
+
