@@ -1,6 +1,7 @@
 #include "model/world.h"
 #include "model/tile.h"
 #include "controller/error.h"
+#include "model/error.h"
 #include "model/unit.h"
 
 #include <queue>
@@ -87,7 +88,7 @@ float MovementSystem::stepCost(const Unit& unit, const Tile& tile) const {
 }
 
 // Find shortest path cost using Dijkstra
-float MovementSystem::shortestPath(Position origin, Position destination) {
+float MovementSystem::shortestPath(Position origin, Position destination) const {
     if (origin == destination) {
         return 0.0f;
     }
@@ -166,7 +167,7 @@ bool MovementSystem::canMove(Position origin, Position destination) const {
     }
     
     // Calculate path cost
-    float pathCost = const_cast<MovementSystem*>(this)->shortestPath(origin, destination);
+    float pathCost = shortestPath(origin, destination);
     
     // Check if within movement range
     return pathCost <= unit->getMovement();
@@ -188,9 +189,6 @@ std::optional<PlayerError> MovementSystem::move(Position origin, Position destin
     } else {
         throw std::logic_error("FATAL INTERNAL: No unit at the source position");
     }
-
-    world.moveUnit(origin, destination);
-    return std::nullopt;
 }
 
 vector<Position> MovementSystem::getMovementSnapshot(Position origin) const {

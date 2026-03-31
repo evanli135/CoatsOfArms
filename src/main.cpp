@@ -3,17 +3,14 @@
 #include "model/util.h"
 #include "model/world.h"
 #include "controller/error.h"
-#include "controller/keyboard.h"
-#include "view/tui.h"
+#include "controller/mouse.h"
+#include "view/gui.h"
 
 
 int main() {
-    // SetConfigFlags(FLAG_WINDOW_UNDECORATED);
-    InitWindow(1920, 1080, "RevRoyale");  // Standard 720p window
+    InitWindow(1920, 1080, "RevRoyale");
     MaximizeWindow();
     SetTargetFPS(60);
-    
-    // Probability::init(); 
 
     Player p1 = Player(0);
     Player p2 = Player(1);
@@ -21,60 +18,92 @@ int main() {
     std::vector<Player> players = {p1, p2};
 
     World model = WorldFactory::create(WorldLayout::BASIC, players);
-    KeyboardController controller1 = KeyboardController(model, p1);
-    KeyboardController controller2 = KeyboardController(model, p2);
-    TUI view = TUI(GetScreenWidth(), GetScreenHeight()); // Last here
-    
+    Controller controller1(model, p1);
+    Controller controller2(model, p2);
+    GUI view(GetScreenWidth(), GetScreenHeight());
+
     model.addObserver(&controller1);
     model.addObserver(&controller2);
     model.startGame();
- 
+
+    Position keyHover(0, 0);
+
     while (!WindowShouldClose()) {
-        if (IsKeyPressed(KEY_Q)) {
-            break;  // Exit game loop
+        if (IsKeyPressed(KEY_Q)) break;
+
+        Controller& active = controller1.isMyTurn() ? controller1 : controller2;
+
+        // --- Arrow key grid scroll (continuous) ---
+        const int SCROLL_SPEED = 8;
+        if (IsKeyDown(KEY_LEFT))  view.scrollGrid(-SCROLL_SPEED, 0);
+        if (IsKeyDown(KEY_RIGHT)) view.scrollGrid( SCROLL_SPEED, 0);
+        if (IsKeyDown(KEY_UP))    view.scrollGrid(0, -SCROLL_SPEED);
+        if (IsKeyDown(KEY_DOWN))  view.scrollGrid(0,  SCROLL_SPEED);
+
+        // --- Mouse hover (syncs keyHover so WASD continues from mouse cursor) ---
+        if (auto pos = view.pollHover()) {
+            active.setHoverPosition(*pos);
+            keyHover = *pos;
         }
 
-        KeyboardController& activeController = controller1.isMyTurn() ? controller1 : controller2;
+        // --- WASD keyboard cursor (overrides mouse hover on key press) ---
+        auto tryMoveKb = [&](int dr, int dc) {
+            try { keyHover.move(dr, dc); active.setHoverPosition(keyHover); }
+            catch (const std::out_of_range&) {}
+        };
+        if (IsKeyPressed(KEY_W)) tryMoveKb(-1,  0);
+        if (IsKeyPressed(KEY_S)) tryMoveKb( 1,  0);
+        if (IsKeyPressed(KEY_A)) tryMoveKb( 0, -1);
+        if (IsKeyPressed(KEY_D)) tryMoveKb( 0,  1);
 
-        if (auto action = pollKeyboardAction()) { 
+        // --- Keyboard game actions ---
+        auto applyResult = [&](std::optional<PlayerError> err) {
+            if (err) view.setError(*err); else view.clearError();
+        };
 
-            auto error = activeController.applyKeyboardAction(*action);
-            
+        if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) {
+            if (auto hp = active.getHoverPosition())
+                applyResult(active.onClick(ClickTarget{*hp}));
+        }
+        if (IsKeyPressed(KEY_BACKSPACE))
+            active.onRightClick();
+        if (IsKeyPressed(KEY_LEFT_SHIFT))
+            applyResult(active.onEndTurn());
+        if (IsKeyPressed(KEY_ONE))   applyResult(active.onClick(ClickTarget{0}));
+        if (IsKeyPressed(KEY_TWO))   applyResult(active.onClick(ClickTarget{1}));
+        if (IsKeyPressed(KEY_THREE)) applyResult(active.onClick(ClickTarget{2}));
+        if (IsKeyPressed(KEY_FOUR))  applyResult(active.onClick(ClickTarget{3}));
+        if (IsKeyPressed(KEY_Z))     applyResult(active.onUndo());
+
+        // --- END TURN button ---
+        if (view.pollEndTurn())
+            applyResult(active.onEndTurn());
+
+        // --- Left click ---
+        if (auto click = view.pollClick(active.getActionLabels())) {
+            auto error = active.onClick(*click);
             if (error) {
-                std::cout << "Action Failed: " << playerErrorToString(error.value()) << "\n";
-                view.setError(error.value());
-            } else { view.clearError(); }
-
+                std::cout << "Action Failed: " << playerErrorToString(*error) << "\n";
+                view.setError(*error);
+            } else {
+                view.clearError();
+            }
         }
+
+        // --- Right click — deselect / cancel ---
+        if (pollMouseRightClick())
+            active.onRightClick();
 
         BeginDrawing();
-        ClearBackground(RAYWHITE);
 
-        if (activeController.getSelectedPosition().has_value()) {
-            const Position& pos = activeController.getSelectedPosition().value();
-            view.render(
-                model,
-                activeController.getHoverPosition(),
-                &activeController.getSelectedPosition().value()
-            );
-
-        } else {
-            view.render(
-                model,
-                activeController.getHoverPosition(),
-                nullptr
-            );
-        }
-
-        // const std::optional<Unit*> selectedUnit = activeController.getSelectedPosition().has_value() 
-        //     ? model.getUnitAt( activeController.getSelectedPosition().value() )  
-        //     : std::nullopt;     
-
-        // view.render(model, 
-        //     activeController.getHoverPosition(), 
-        //     model.getUnitAt(activeController.getSelectedPosition()), 
-        //     model.getCurrentPlayer().getId());
-
+        auto selPos = active.getSelectedPosition();
+        view.render(
+            model,
+            active.getHoverPosition().value_or(Position(0, 0)),
+            selPos.has_value() ? &selPos.value() : nullptr,
+            active.getActionLabels(),
+            active.getCurrentMode()
+        );
 
         EndDrawing();
     }

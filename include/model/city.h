@@ -1,3 +1,5 @@
+#pragma once
+
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -13,10 +15,12 @@ const int MAX_LEVEL = 5;
 class City {
 public:
     City(const string& name, int buildingCapacity)
-        : name(name), buildingCapacity(buildingCapacity), upgradeLevel(0), owner(nullptr) {}
+        : name(name), buildingCapacity(buildingCapacity),
+          upgradeLevel(0), level(0),
+          owner(&Player::null()) {}
 
     void addBuilding(BuildingType type) {
-        if (buildings.size() >= buildingCapacity) {
+        if (buildings.size() >= (size_t)buildingCapacity) {
             throw std::logic_error("City has reached building capacity");
         }
         buildings[type]++;
@@ -31,8 +35,20 @@ public:
         }
     }
 
+    /** Returns true if this city has a real (non-null) owner. */
+    bool hasOwner() const { return !owner->isNull(); }
+
+    /**
+     * Returns the owning player.
+     * Always safe — if no owner has been set, returns Player::null().
+     */
+    const Player& getOwner() const { return *owner; }
+
+    /**
+     * Sets the owner. Pass nullptr to reset to the null sentinel.
+     */
     void setOwner(Player* player) {
-        owner = player;
+        owner = (player && !player->isNull()) ? player : &Player::null();
     }
 
     void upgrade() {
@@ -42,11 +58,10 @@ public:
         upgradeLevel++;
     }
 
-
 private:
     string name;
     unordered_map<BuildingType, int> buildings;
-    Player* owner;
+    const Player* owner;
     int buildingCapacity;
     int upgradeLevel;
     int level;

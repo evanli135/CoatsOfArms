@@ -33,6 +33,19 @@ public:
         return unit;
     }
 
+    bool hasCity() const {
+        return city.has_value();
+    }
+
+    const City* getCity() const {
+        if (!hasCity()) {
+            return nullptr;
+        }
+        return &city.value();
+    }
+    
+
+
     std::optional<UnitId>& getUnit() {
         return unit;
     }
@@ -66,9 +79,6 @@ public:
         unit.reset();
         return u;
     }
-
-    bool hasCity() const { return city.has_value(); }
-    
 
 private:
     Terrain terrain;

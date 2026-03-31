@@ -5,6 +5,7 @@
 
 #include "model/spirit.h"
 #include "controller/observer.h"
+#include "controller/command.h"
 #include "model/tile.h"
 #include "controller/error.h"
 #include "model/player.h"
@@ -18,61 +19,9 @@ enum class GamePhase {
     ENDGAME
 };
 
-class MovementSystem;
-class BattleSystem;
-
-class World {
-public:
-    World(std::vector<Player> players);
-    ~World() = default;
-
-    int getTurn() const { return turn; }
-
-    Unit* getUnit(const UnitId id) const { return units.at(id).get(); }
-    Unit* getUnit(UnitId id) const { return units.at(id).get(); };
-
-    Unit* getUnitAt(const Position& pos) const;
-    const std::optional<Unit> getCopyAt(const Position& pos) const;
-
-    const Tile& getTileAt(const Position& pos) const;
-    Tile& getTileAt(const Position& pos);
-
-    bool hasUnitAt(const Position& from) const;
-    bool canMove(const Position& from, const Position& to);
-    bool canAttack(const Position& from, const Position& to);
-
-    const Player& getCurrentPlayer() const;
-    void nextTurn();
-
-    void moveUnit(const Position& from, const Position& to);
-    void battle(const Position& attackerPos, const Position& defenderPos);
-
-    std::optional<PlayerError> applyControllerRequest(ControllerRequest action);
-
-    void notifyObservers(ModelEvent event);
-    void addObserver(ModelObserver* observer);
-
-    void addUnit(const Position& pos, const Unit unit);
-
-    void startGame();
-
-private:
-    vector<vector<Tile>> grid;
-    vector<Player> players;
-
-    unordered_map<UnitId, std::unique_ptr<Unit>> units = unordered_map<UnitId, std::unique_ptr<Unit>>();
-
-    int currentPlayerIndex = 0;
-
-    GamePhase phase = GamePhase::PREGAME; 
-
-    int turn = 0;
-
-    vector<ModelObserver*> observers = vector<ModelObserver*>();
-
-    BattleSystem battleSystem{*this};
-    MovementSystem movementSystem{*this};
-};
+// Forward-declare World so MovementSystem/BattleSystem can hold a World& before
+// the full World class definition.
+class World;
 
 class MovementSystem {
 public:
@@ -92,7 +41,7 @@ private:
     bool canMoveThroughTile(Position origin, Position pos, Position desination) const;
 
     float stepCost(const Unit& unit, const Tile& tile) const;
-    float shortestPath(Position origin, Position destination);
+    float shortestPath(Position origin, Position destination) const;
 };
 
 class BattleSystem {
@@ -108,59 +57,98 @@ private:
     World& world;
 
     // Cost for the unit to cross this tile
-    int stepCost(Tile* tile, Unit unit);
-    int shortestPath(Position origin, Position destination);
+    int stepCost(Tile* tile, Unit unit) const;
+    int shortestPath(Position origin, Position destination) const;
+};
+
+class World {
+    friend class MoveCommand;
+    friend class AttackCommand;
+
+public:
+    World(std::vector<Player> players);
+    ~World() = default;
+
+    // BattleSystem/MovementSystem hold World& so the implicit move constructor
+    // is deleted. Define it explicitly so WorldFactory can return World by value.
+    World(World&&) noexcept;
+    World& operator=(World&&) = delete;
+    World(const World&) = delete;
+    World& operator=(const World&) = delete;
+
+    int getTurn() const { return turn; }
+
+    Unit* getUnit(UnitId id) const { return units.at(id).get(); }
+
+    Unit* getUnitAt(const Position& pos) const;
+    const std::optional<Unit> getCopyAt(const Position& pos) const;
+
+    const Tile& getTileAt(const Position& pos) const;
+    Tile& getTileAt(const Position& pos);
+
+    bool hasUnitAt(const Position& from) const;
+    bool canMove(const Position& from, const Position& to);
+    bool canAttack(const Position& from, const Position& to);
+
+    bool hasCityAt(const Position& pos) const;
+    const City* getCityAt(const Position& pos) const;
+
+    const Player& getCurrentPlayer() const;
+    void nextTurn();
+
+    void moveUnit(const Position& from, const Position& to);
+    void battle(const Position& attackerPos, const Position& defenderPos);
+
+    void addToConstructionQueue(const Position& pos, BuildingType buildingType);
+
+    std::optional<PlayerError> applyControllerRequest(ControllerRequest action);
+
+    void notifyObservers(const ModelEvent& event);
+    void addObserver(ModelObserver* observer);
+
+    /**
+     * Undoes the most recent command executed this turn.
+     * No-op if the history is empty.
+     */
+    void undoLastCommand();
+
+    /**
+     * Clears the command history for this turn.
+     * Called automatically by nextTurn().
+     */
+    void clearCommandHistory();
+
+    void addUnit(const Position& pos, const Unit unit);
+
+    void startGame();
+
+private:
+    vector<vector<Tile>> grid;
+    vector<Player> players;
+
+    unordered_map<UnitId, std::unique_ptr<Unit>> units = unordered_map<UnitId, std::unique_ptr<Unit>>();
+
+    int currentPlayerIndex = 0;
+
+    GamePhase phase = GamePhase::PREGAME;
+
+    int turn = 0;
+
+    vector<ModelObserver*> observers = vector<ModelObserver*>();
+
+    BattleSystem   battleSystem;
+    MovementSystem movementSystem;
+
+    std::vector<std::unique_ptr<GameCommand>> commandHistory;
 };
 
 
 /**
  * Foundry = Basic Construction Building (builder hut)
  */
-// class ConstructionLogic {
-// public:
-//     void tick();
-//     void assignFoundry(Position position, BuildingType buildingType);
-//     void reassignFoundry(Position newPosition, BuildingType newBuildingType, Position oldPosition, BuildingType oldBuildingType);
-
-//     int numFreeFoundries() const { return freeFoundries; }
-//     bool hasFreeFoundries() const { return freeFoundries > 0; }
-
-
-// private:
-//     unordered_map<Position, unordered_map<BuildingType, int>> foundryJobs;
-
-//     int totalFoundries;
-//     int freeFoundries;
-
-//     void construct(Grid& grid, Position position, BuildingType buildingType);
-// };
-
-// class ArmyLogic {
-// public:
-//     void tick();
-
-//     void beginTraining(UnitType unitType, Position position, int barracks);
-//     void addBarrack(Position position);
-//     void haltTraining(Position position);
-
-// private:
-//     unordered_map<Position, unordered_map<UnitType, int>> barrackJobs;
-
-//     void deploy(Grid& grid, Position position, UnitType buildingType);
-// };
-
-// class SpiritLogic {
-// public:
-//     void tick();
-
-//     void beginDiscovering(Blessing blessing);
-//     void haltDiscovering(Blessing blessing);
-
-// private:
-//     unordered_map<Blessing, int> shrineJobs;
-
-//     void discover();
-// };
+// class ConstructionLogic { ... };
+// class ArmyLogic { ... };
+// class SpiritLogic { ... };
 
 
 enum class Direction {
@@ -185,4 +173,3 @@ public:
 private:
     static World createBasicWorld(std::vector<Player> players);
 };
-

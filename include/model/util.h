@@ -3,9 +3,9 @@
 #include <stdexcept>
 
 namespace Game {
-    inline constexpr int WIDTH = 16;
-    inline constexpr int HEIGHT = 16;
-    inline constexpr int SIZE = 16;
+    inline constexpr int WIDTH = 12;
+    inline constexpr int HEIGHT = 12;
+    inline constexpr int SIZE = 12;
 }
 
 /**

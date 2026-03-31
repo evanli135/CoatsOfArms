@@ -24,11 +24,10 @@ std::optional<PlayerError> BattleSystem::battle(Position attackerPos, Position d
 
     assert(attacker && defender);
 
-    defender->lowerHP(attacker->getDamage());
+    defender->lowerHP(attacker->computeDamageAgainst(*defender));
 
-    // EDGE CASE: GALE
     if (!defender->isAlive()) {
-        world.getTileAt(defenderPos).getUnit().value();
+        world.getTileAt(defenderPos).removeUnit();
     }
 
     attacker->setMoved(true);
@@ -53,5 +52,6 @@ vector<Position> BattleSystem::getAttackSnapshot(Position origin) const {
             }
         }
     }
+    return snapshot;
 }
 

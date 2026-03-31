@@ -4,8 +4,21 @@ $COMPILER = "C:/raylib/w64devkit/bin/g++"
 $SRC = @(
     "src/main.cpp",
     "src/model/world/world.cpp",
+    "src/model/world/movement.cpp",
+    "src/model/world/battle.cpp",
     "src/view/tui/tui.cpp",
-    "src/controller/keyboard.cpp" 
+    "src/view/gui.cpp",
+    "src/view/grid_view.cpp",
+    "src/view/panel_views.cpp",
+    "src/view/terrain_sprites.cpp",
+    "src/view/unit_sprites.cpp",
+    "src/controller/command.cpp",
+    "src/controller/keyboard.cpp",
+    "src/controller/mouse.cpp",
+    "src/controller/mode_handler.cpp",
+    "src/controller/modes/tactic_mode.cpp",
+    "src/controller/modes/training_mode.cpp",
+    "src/controller/modes/building_mode.cpp"
 )
 
 $OUT = "bin/revroyale.exe"

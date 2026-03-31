@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -File scripts/build.ps1)",
+      "Bash(powershell -ExecutionPolicy Bypass -File scripts/build.ps1)",
+      "Bash(taskkill /f /im revroyale.exe)"
+    ]
+  }
+}

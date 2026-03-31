@@ -1,6 +1,8 @@
 #include "controller/observer.h"
+#include "controller/command.h"
 #include "model/world.h"
 #include "controller/error.h"
+#include "model/error.h"
 #include "model/unit.h"
 
 #include <iostream>
@@ -15,7 +17,7 @@ int getDistance(const Position& from, const Position& to) {
     return std::max(std::abs(to.row() - from.row()), std::abs(to.col() - from.col()));
 }
 
-World::World(std::vector<Player> players) 
+World::World(std::vector<Player> players)
     : grid(Game::HEIGHT, std::vector<Tile>(Game::WIDTH, Tile())),
       players(players),
       currentPlayerIndex(0),
@@ -27,14 +29,38 @@ World::World(std::vector<Player> players)
     }
 }
 
+World::World(World&& other) noexcept
+    : grid(std::move(other.grid)),
+      players(std::move(other.players)),
+      units(std::move(other.units)),
+      currentPlayerIndex(other.currentPlayerIndex),
+      phase(other.phase),
+      turn(other.turn),
+      observers(std::move(other.observers)),
+      commandHistory(std::move(other.commandHistory)),
+      battleSystem(*this),       // re-bind to the new object
+      movementSystem(*this)      // re-bind to the new object
+{}
+
 Unit* World::getUnitAt(const Position& pos) const {
     auto unitId = getTileAt(pos).getUnit();
     if (!unitId.has_value()) {
         return nullptr;
     }
-    
+
     auto it = units.find(unitId.value());
     return (it != units.end()) ? it->second.get() : nullptr;
+}
+
+bool World::hasCityAt(const Position& pos) const {
+    return getTileAt(pos).hasCity();
+}
+
+const City* World::getCityAt(const Position& pos) const {
+    if (!hasCityAt(pos)) {
+        return nullptr;
+    }
+    return getTileAt(pos).getCity();
 }
 
 const Tile& World::getTileAt(const Position& pos) const {
@@ -49,18 +75,21 @@ bool World::canMove(const Position& from, const Position& to) {
     if (!getTileAt(to).isWalkable()) {
         return false;
     }
-    
+
     const Unit* unit = getUnitAt(from);
     if (!unit) return false;
-    
+
     return getDistance(from, to) <= unit->getMovement();
 }
 
 void World::nextTurn() {
-    turn++;
-    currentPlayerIndex = (currentPlayerIndex + 1) % players.size();   
+    // Clear undo history — can't undo across turns.
+    commandHistory.clear();
 
-    // Reset movement for all units belonging to current player
+    turn++;
+    currentPlayerIndex = (currentPlayerIndex + 1) % players.size();
+
+    // Reset movement for all units belonging to new current player.
     int currentPlayerId = players[currentPlayerIndex].getId();
     for (auto& [id, unit] : units) {
         if (unit->getOwner().getId() == currentPlayerId) {
@@ -69,34 +98,34 @@ void World::nextTurn() {
     }
 
     printCurrentPlayer(*this);
-    notifyObservers(ModelEvent::TURN_CHANGE);
+    notifyObservers(TurnChangeEvent{turn, players[currentPlayerIndex].getId()});
 }
 
 void World::addObserver(ModelObserver* observer) {
-    if (observer == nullptr) { 
-        throw std::logic_error("Nullptr observer"); 
+    if (observer == nullptr) {
+        throw std::logic_error("Nullptr observer");
     }
     observers.push_back(observer);
 }
 
-void World::notifyObservers(ModelEvent event) {
-    for (auto observer: observers) {
+void World::notifyObservers(const ModelEvent& event) {
+    for (auto observer : observers) {
         observer->onModelChanged(event);
     }
 }
 
 void World::startGame() {
-    if (phase == GamePhase::ENDGAME) { 
-        throw std::logic_error("Game has ended"); 
+    if (phase == GamePhase::ENDGAME) {
+        throw std::logic_error("Game has ended");
     }
 
     phase = GamePhase::MIDGAME;
     printCurrentPlayer(*this);
-    notifyObservers(ModelEvent::TURN_CHANGE);
+    notifyObservers(TurnChangeEvent{turn, players[currentPlayerIndex].getId()});
 }
 
 std::optional<PlayerError> World::applyControllerRequest(ControllerRequest action) {
-    Position origin = action.getOrigin();
+    Position origin      = action.getOrigin();
     Position destination = action.getDestination();
 
     switch (action.getAction()) {
@@ -105,36 +134,43 @@ std::optional<PlayerError> World::applyControllerRequest(ControllerRequest actio
             throw std::logic_error("Not implemented yet");
 
         case (ControllerAction::MOV): {
-            return movementSystem.move(origin, destination);
+            auto cmd = std::make_unique<MoveCommand>(origin, destination, action.getPlayer());
+            auto result = cmd->execute(*this);
+            if (!result.has_value()) {
+                commandHistory.push_back(std::move(cmd));
+            }
+            return result;
         }
 
         case (ControllerAction::ATT): {
-            const Unit* attacker = getUnitAt(origin);
             const Unit* defender = getUnitAt(destination);
-            
-            if (!attacker || !attacker->sameOwner(action.getPlayer())) {
-                throw InternalError::UNITABSENCE;
-            }
+            if (!defender) throw InternalError::UNITABSENCE;
 
-            if (!attacker->canMove()) {
-                return PlayerError::UNITCANTMOVE;
+            // Snapshot the defender before the attack so undo can restore it.
+            auto cmd = std::make_unique<AttackCommand>(
+                origin, destination, action.getPlayer(),
+                defender->getHealth(), *defender
+            );
+            auto result = cmd->execute(*this);
+            if (!result.has_value()) {
+                commandHistory.push_back(std::move(cmd));
             }
-
-            if (!defender || defender->sameOwner(action.getPlayer())) {
-                throw InternalError::UNITABSENCE;
-            }
-
-            if (!canAttack(origin, destination)) {
-                return PlayerError::OUTOFREACH;
-            }
-
-            battle(origin, destination);
-            return std::nullopt;
+            return result;
         }
-            
+
         default:
             throw InternalError::FATAL;
     }
+}
+
+void World::undoLastCommand() {
+    if (commandHistory.empty()) return;
+    commandHistory.back()->undo(*this);
+    commandHistory.pop_back();
+}
+
+void World::clearCommandHistory() {
+    commandHistory.clear();
 }
 
 bool World::hasUnitAt(const Position& pos) const {
@@ -152,22 +188,41 @@ bool World::canAttack(const Position& from, const Position& to) {
     if (!hasUnitAt(from) || !hasUnitAt(to)) {
         return false;
     }
-    
+
     const Unit* attacker = getUnitAt(from);
     return getDistance(from, to) <= attacker->getRange() + attacker->getMovement();
 }
 
 void World::battle(const Position& attackerPos, const Position& defenderPos) {
-    if (!hasUnitAt(attackerPos) || !hasUnitAt(defenderPos)) {
+    Unit* attacker = getUnitAt(attackerPos);
+    Unit* defender = getUnitAt(defenderPos);
+
+    if (!attacker || !defender) {
         throw std::logic_error("Battle requires units at both positions");
     }
-    
-    // TODO: Implement proper combat
-    // For now, just remove defender
-    auto defenderId = getTileAt(defenderPos).removeUnit();
-    if (defenderId.has_value()) {
-        units.erase(defenderId.value());  // unique_ptr automatically deletes
+
+    // Apply damage through the modifier chain.
+    int dmg = attacker->computeDamageAgainst(*defender);
+    defender->lowerHP(dmg);
+    attacker->setMoved(true);
+
+    if (!defender->isAlive()) {
+        auto defenderId = getTileAt(defenderPos).removeUnit();
+        if (defenderId.has_value()) {
+            notifyObservers(UnitDiedEvent{defenderId.value(), defenderPos});
+            units.erase(defenderId.value());
+        }
     }
+}
+
+void World::moveUnit(const Position& from, const Position& to) {
+    auto unitId = getTileAt(from).removeUnit();
+    if (!unitId.has_value()) {
+        throw std::logic_error("No unit at source position");
+    }
+    getTileAt(to).placeUnit(unitId.value());
+    units.at(unitId.value())->setMoved(true);
+    notifyObservers(UnitMovedEvent{unitId.value(), from, to});
 }
 
 void World::addUnit(const Position& pos, Unit unit) {
@@ -180,8 +235,8 @@ void World::addUnit(const Position& pos, Unit unit) {
     }
 
     UnitId id = unit.getId();
-    units[id] = std::make_unique<Unit>(std::move(unit));  // Store in map
-    getTileAt(pos).placeUnit(id);  // Store ID in tile    
+    units[id] = std::make_unique<Unit>(std::move(unit));
+    getTileAt(pos).placeUnit(id);
 }
 
 World WorldFactory::create(WorldLayout layout, std::vector<Player> players) {
@@ -189,11 +244,41 @@ World WorldFactory::create(WorldLayout layout, std::vector<Player> players) {
 
     switch (layout) {
         case WorldLayout::BASIC: {
-            Unit warrior1 = UnitFactory::create(UnitType::WARRIOR, players[0]);
-            Unit warrior2 = UnitFactory::create(UnitType::WARRIOR, players[1]);
-            
-            world.addUnit(Position(0, 0), std::move(warrior1));
-            world.addUnit(Position(Game::WIDTH - 1, Game::HEIGHT - 1), std::move(warrior2));
+            // --- Terrain ---
+            auto set = [&](int r, int c, Terrain t) {
+                world.getTileAt(Position(r, c)).setTerrain(t);
+            };
+
+            // Forest cluster — upper-left
+            set(1, 2, Terrain::FOREST); set(1, 3, Terrain::FOREST);
+            set(2, 1, Terrain::FOREST); set(2, 2, Terrain::FOREST);
+            set(3, 1, Terrain::FOREST);
+
+            // Mountain range — centre
+            set(3, 5, Terrain::MOUNTAIN); set(3, 6, Terrain::MOUNTAIN);
+            set(4, 6, Terrain::MOUNTAIN); set(4, 7, Terrain::MOUNTAIN);
+            set(5, 7, Terrain::MOUNTAIN);
+
+            // River — diagonal crossing from upper-right to lower-left
+            set(2, 8, Terrain::RIVER); set(2, 9, Terrain::RIVER);
+            set(3, 7, Terrain::RIVER); set(3, 8, Terrain::RIVER);
+            set(4, 4, Terrain::RIVER); set(4, 5, Terrain::RIVER);
+            set(5, 3, Terrain::RIVER); set(5, 4, Terrain::RIVER);
+            set(6, 3, Terrain::RIVER);
+
+            // Ocean lake — centre-right
+            set(7, 6, Terrain::OCEAN);
+            set(7, 7, Terrain::OCEAN); set(8, 7, Terrain::OCEAN);
+
+            // Forest cluster — lower-right
+            set(8, 10, Terrain::FOREST);
+            set(9,  9, Terrain::FOREST); set(9, 10, Terrain::FOREST);
+            set(10, 9, Terrain::FOREST);
+
+            // --- Units ---
+            world.addUnit(Position(0, 0),   UnitFactory::create(UnitType::WARRIOR, players[0]));
+            world.addUnit(Position(11, 11), UnitFactory::create(UnitType::WARRIOR, players[1]));
+            world.addUnit(Position(9, 11),  UnitFactory::create(UnitType::RANGER,  players[1]));
             break;
         }
         case WorldLayout::EMPTY:

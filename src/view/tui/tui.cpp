@@ -42,10 +42,9 @@ void TUI::render(
 
     const Unit* selectedUnit = nullptr;
     if (selectedPosition != nullptr) {
-        selectedUnit = world.getTileAt(*selectedPosition).getUnit().has_value() 
-            ? &world.getTileAt(*selectedPosition).getUnit().value() 
-            : nullptr;
-        }
+        auto uidOpt = world.getTileAt(*selectedPosition).getUnit();
+        selectedUnit = uidOpt.has_value() ? world.getUnit(uidOpt.value()) : nullptr;
+    }
 
     renderGrid(world, cursor, selectedPosition);
     renderInfoPanel(world, selectedUnit, currentPlayer);
@@ -105,7 +104,9 @@ void TUI::renderCell(const World& world, const Position& pos, bool isCursor, boo
     const auto& unitOpt = tile.getUnit();
 
     if (unitOpt.has_value()) {
-        const Unit& unit = unitOpt.value();
+        const Unit* unitPtr = world.getUnit(unitOpt.value());
+        if (!unitPtr) return;
+        const Unit& unit = *unitPtr;
         Color unitColor = getUnitColor(&unit);
 
         // draw unit symbol

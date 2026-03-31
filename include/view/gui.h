@@ -1,97 +1,60 @@
 #pragma once
-
-#include "raylib.h"
-#include "model/world.h"
-#include "model/unit.h"
+#include <optional>
+#include <string>
+#include <vector>
+#include "controller/action.h"
 #include "controller/error.h"
+#include "model/world.h"
+#include "model/util.h"
+#include "view/layout.h"
 
-class ControlView;
-class ErrorView;
-class InformationView;
+// Sub-views are owned by GUI via pointers; headers included in gui.cpp.
 class GridView;
 class ActionView;
+class InformationView;
+class ErrorView;
 
+// ---------------------------------------------------------------------------
+// GUI — top-level view.  Owns all sub-views and the screen layout.
+// ---------------------------------------------------------------------------
 class GUI {
-
-private:
-    ControlView controlView;
-    ErrorView errorView;
-    InformationView informationView;
-    GridView gridView;
-    ActionView actionView;
-
-    int gridWindowWidth = 600;
-    int gridWindowHeight = 600;
-
-    int marginGridInfo = 10;
-
 public:
     GUI(int width, int height);
+    ~GUI();
 
-    void render(
-        const World& world,
-        const Position& cursor,
-        const Position* selectedPosition
-        );
- 
-    void setError(const PlayerError error);
+    /** Render the full frame. */
+    void render(const World& world,
+                const Position& hoverPos,
+                const Position* selectedPos,
+                const std::vector<std::string>& actionLabels,
+                ControllerMode currentMode);
+
+    /** Resolve a left-click to a ClickTarget.  Priority: grid > action > mode. */
+    std::optional<ClickTarget> pollClick(const std::vector<std::string>& actionLabels) const;
+
+    /** Grid tile under the cursor, or nullopt if off-grid. */
+    std::optional<Position> pollHover() const;
+
+    void setError(PlayerError error);
     void clearError();
-};
 
-class ControlView {
+    /** Pan the grid viewport by (dpx, dpy) pixels. */
+    void scrollGrid(int dpx, int dpy);
 
-private:
-
-public:
-    ControlView();
-
-    void render(
-        const World& world,
-        const Position& cursor,
-        const Position* selectedPosition
-    )
-};
-
-class ErrorView {
-private:
-
-public:
-    ErrorView();
-
-    void setError(const PlayerError error);
-    void clearError();
-};
-
-class InformationView {
+    /** Returns true if the END TURN button was clicked this frame. */
+    bool pollEndTurn() const;
 
 private:
+    int screenWidth, screenHeight;
 
+    std::vector<Rect> actionButtonSlots;
+    std::vector<Rect> modeButtonSlots;
+    Rect endTurnButton;
 
-public:
-    InformationView();
+    GridView*        gridView;
+    ActionView*      actionView;
+    InformationView* informationView;
+    ErrorView*       errorView;
 
-    void render(const World& world, const Unit* selectedUnit, int currentPlayer);
-};
-
-class GridView {
-
-private:
-    void renderUnit(const World& world, const Position& pos, bool isCursor, bool isSelected);
-    void renderTerrain(const World& world, const Position& pos);
-    void renderCell(const World& world, const Position& pos, bool isCursor, bool isSelected);
-
-public:
-    GridView();
-
-    void render(const World& world, const Position& cursor, const Position* selectedPosition);
-};
-
-class ActionView {
-
-private:
-
-public:
-    ActionView();
-
-    void render(const World& world, const Position& cursor, const Position* selectedPosition);
+    std::optional<Position> pixelToTile(int px, int py) const;
 };
