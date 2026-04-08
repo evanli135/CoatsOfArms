@@ -68,10 +68,13 @@ private:
 class AttackCommand : public GameCommand {
 public:
     AttackCommand(Position attackerPos, Position defenderPos, Player player,
-                  int defenderHpBefore, Unit defenderSnapshot)
+                  int defenderHpBefore, Unit defenderSnapshot,
+                  int attackerHpBefore, Unit attackerSnapshot)
         : attackerPos(attackerPos), defenderPos(defenderPos), player(player),
           defenderHpBefore(defenderHpBefore),
-          defenderSnapshot(std::move(defenderSnapshot)) {}
+          defenderSnapshot(std::move(defenderSnapshot)),
+          attackerHpBefore(attackerHpBefore),
+          attackerSnapshot(std::move(attackerSnapshot)) {}
 
     std::optional<PlayerError> execute(World& world) override;
     void undo(World& world) override;
@@ -83,4 +86,6 @@ private:
     // Saved state for undo
     int  defenderHpBefore;
     Unit defenderSnapshot;   // full copy captured before execute()
+    int  attackerHpBefore;   // needed to undo retaliation damage
+    Unit attackerSnapshot;   // full copy in case attacker dies from retaliation
 };

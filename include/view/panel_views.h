@@ -26,7 +26,9 @@ private:
 class InformationView {
 public:
     InformationView();
-    void render(const World& world, const Position* hoverPos) const;
+    void render(const World& world,
+                const Position* hoverPos,
+                const Position* selectedPos = nullptr) const;
 };
 
 // ---------------------------------------------------------------------------
@@ -37,5 +39,6 @@ public:
     ActionView();
     void render(const std::vector<std::string>& labels,
                 const std::vector<Rect>& buttonSlots,
-                int pendingIndex) const;
+                int pendingIndex,
+                const std::vector<bool>& enabled = {}) const;
 };

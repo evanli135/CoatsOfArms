@@ -94,6 +94,7 @@ void World::nextTurn() {
     for (auto& [id, unit] : units) {
         if (unit->getOwner().getId() == currentPlayerId) {
             unit->setMoved(false);
+            unit->setAttacked(false);
         }
     }
 
@@ -144,12 +145,15 @@ std::optional<PlayerError> World::applyControllerRequest(ControllerRequest actio
 
         case (ControllerAction::ATT): {
             const Unit* defender = getUnitAt(destination);
-            if (!defender) throw InternalError::UNITABSENCE;
+            if (!defender) return PlayerError::INVALIDTARGET;
+            const Unit* attacker = getUnitAt(origin);
+            if (!attacker) return PlayerError::INVALIDTARGET;
 
-            // Snapshot the defender before the attack so undo can restore it.
+            // Snapshot both units before the attack so undo can fully restore them.
             auto cmd = std::make_unique<AttackCommand>(
                 origin, destination, action.getPlayer(),
-                defender->getHealth(), *defender
+                defender->getHealth(), *defender,
+                attacker->getHealth(), *attacker
             );
             auto result = cmd->execute(*this);
             if (!result.has_value()) {
@@ -201,11 +205,17 @@ void World::battle(const Position& attackerPos, const Position& defenderPos) {
         throw std::logic_error("Battle requires units at both positions");
     }
 
-    // Apply damage through the modifier chain.
+    // Attacker strikes defender.
     int dmg = attacker->computeDamageAgainst(*defender);
     defender->lowerHP(dmg);
-    attacker->setMoved(true);
+    attacker->setAttacked(true);
 
+    // Defender retaliates with equal damage if still alive and attacker is in range.
+    if (defender->isAlive() && battleSystem.canAttack(defenderPos, attackerPos)) {
+        attacker->lowerHP(dmg);
+    }
+
+    // Remove dead units (defender first, then check attacker).
     if (!defender->isAlive()) {
         auto defenderId = getTileAt(defenderPos).removeUnit();
         if (defenderId.has_value()) {
@@ -213,6 +223,52 @@ void World::battle(const Position& attackerPos, const Position& defenderPos) {
             units.erase(defenderId.value());
         }
     }
+
+    if (!attacker->isAlive()) {
+        auto attackerId = getTileAt(attackerPos).removeUnit();
+        if (attackerId.has_value()) {
+            notifyObservers(UnitDiedEvent{attackerId.value(), attackerPos});
+            units.erase(attackerId.value());
+        }
+    }
+}
+
+World::CombatForecast World::getCombatForecast(Position from, Position to) const {
+    CombatForecast f{};
+
+    if (!hasUnitAt(from) || !hasUnitAt(to)) return f;
+
+    const Unit* attacker = getUnitAt(from);
+    const Unit* defender = getUnitAt(to);
+    if (!attacker || !defender || attacker->sameOwner(*defender)) return f;
+
+    f.attackerCanAct   = attacker->canAttack();
+    f.inRange          = battleSystem.canAttack(from, to);
+    f.defenderHpBefore = defender->getHealth();
+    f.attackerHpBefore = attacker->getHealth();
+
+    if (f.attackerCanAct && f.inRange) {
+        f.damage          = attacker->computeDamageAgainst(*defender);
+        f.defenderHpAfter = std::max(0, defender->getHealth() - f.damage);
+        f.lethal          = (f.defenderHpAfter == 0);
+
+        // Retaliation: defender hits back if it survives and attacker is in range.
+        bool defenderCanRetaliate = !f.lethal && battleSystem.canAttack(to, from);
+        if (defenderCanRetaliate) {
+            f.retaliation     = f.damage;
+            f.attackerHpAfter = std::max(0, attacker->getHealth() - f.retaliation);
+            f.attackerDies    = (f.attackerHpAfter == 0);
+        } else {
+            f.retaliation     = 0;
+            f.attackerHpAfter = attacker->getHealth();
+            f.attackerDies    = false;
+        }
+    } else {
+        f.defenderHpAfter = defender->getHealth();
+        f.attackerHpAfter = attacker->getHealth();
+    }
+
+    return f;
 }
 
 void World::moveUnit(const Position& from, const Position& to) {
@@ -276,9 +332,9 @@ World WorldFactory::create(WorldLayout layout, std::vector<Player> players) {
             set(10, 9, Terrain::FOREST);
 
             // --- Units ---
-            world.addUnit(Position(0, 0),   UnitFactory::create(UnitType::WARRIOR, players[0]));
-            world.addUnit(Position(11, 11), UnitFactory::create(UnitType::WARRIOR, players[1]));
-            world.addUnit(Position(9, 11),  UnitFactory::create(UnitType::RANGER,  players[1]));
+            world.addUnit(Position(5, 5),  UnitFactory::create(UnitType::WARRIOR, players[0]));
+            world.addUnit(Position(8, 5),  UnitFactory::create(UnitType::WARRIOR, players[1]));
+            world.addUnit(Position(8, 8),  UnitFactory::create(UnitType::RANGER,  players[1]));
             break;
         }
         case WorldLayout::EMPTY:

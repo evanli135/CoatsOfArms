@@ -42,7 +42,8 @@ void GUI::render(const World& world,
                  const Position& hoverPos,
                  const Position* selectedPos,
                  const std::vector<std::string>& actionLabels,
-                 ControllerMode currentMode)
+                 ControllerMode currentMode,
+                 int pendingActionIndex)
 {
     ClearBackground(Color{16, 16, 26, 255});
 
@@ -51,8 +52,26 @@ void GUI::render(const World& world,
     DrawText(TextFormat("Player %d  |  Turn %d", cp+1, world.getTurn()),
              screenWidth/2 - 80, 16, 16, playerColor(cp));
 
+    // Compute movement reach and attackable tiles for the selected unit
+    std::vector<Position> reachable;
+    std::vector<Position> attackable;
+    std::vector<bool>     enabledActions(actionLabels.size(), true);
+
+    if (selectedPos && world.hasUnitAt(*selectedPos)) {
+        const Unit* selUnit = world.getUnitAt(*selectedPos);
+        if (selUnit) {
+            reachable  = world.getMovementSnapshot(*selectedPos);
+            attackable = world.getAttackSnapshot(*selectedPos);
+            // Index 0 = MOV, index 1 = ATT in tactic mode
+            if (currentMode == ControllerMode::TACTIC) {
+                if (actionLabels.size() > 0) enabledActions[0] = selUnit->canMove();
+                if (actionLabels.size() > 1) enabledActions[1] = selUnit->canAttack();
+            }
+        }
+    }
+
     // Grid
-    gridView->render(world, &hoverPos, selectedPos);
+    gridView->render(world, &hoverPos, selectedPos, reachable, attackable);
 
     // Error overlay
     errorView->render(ERR_X, ERR_Y);
@@ -68,10 +87,10 @@ void GUI::render(const World& world,
 
     // Action buttons (left panel)
     DrawText("ACTIONS", ACT_X, ACT_BTN_Y-20, 14, Color{160, 160, 180, 255});
-    actionView->render(actionLabels, actionButtonSlots, -1);
+    actionView->render(actionLabels, actionButtonSlots, pendingActionIndex, enabledActions);
 
     // Info panel (right panel)
-    informationView->render(world, &hoverPos);
+    informationView->render(world, &hoverPos, selectedPos);
 
     // END TURN button
     Color btnBg   = Color{45, 110, 55, 255};

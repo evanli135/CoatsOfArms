@@ -27,7 +27,8 @@ public:
                 const Position& hoverPos,
                 const Position* selectedPos,
                 const std::vector<std::string>& actionLabels,
-                ControllerMode currentMode);
+                ControllerMode currentMode,
+                int pendingActionIndex = -1);
 
     /** Resolve a left-click to a ClickTarget.  Priority: grid > action > mode. */
     std::optional<ClickTarget> pollClick(const std::vector<std::string>& actionLabels) const;

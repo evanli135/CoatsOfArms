@@ -2,6 +2,7 @@
 #include <raylib.h>
 #include "model/util.h"
 #include "model/world.h"
+#include "controller/action.h"
 #include "controller/error.h"
 #include "controller/mouse.h"
 #include "view/gui.h"
@@ -62,8 +63,12 @@ int main() {
         };
 
         if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) {
-            if (auto hp = active.getHoverPosition())
+            if (active.getSelectedPosition().has_value()) {
+                // Unit already selected — space deselects
+                active.onRightClick();
+            } else if (auto hp = active.getHoverPosition()) {
                 applyResult(active.onClick(ClickTarget{*hp}));
+            }
         }
         if (IsKeyPressed(KEY_BACKSPACE))
             active.onRightClick();
@@ -96,13 +101,24 @@ int main() {
 
         BeginDrawing();
 
+        // Map pending ControllerAction → button index for the active-button highlight
+        int pendingIdx = -1;
+        if (auto pa = active.getPendingAction()) {
+            switch (*pa) {
+                case ControllerAction::MOV: pendingIdx = 0; break;
+                case ControllerAction::ATT: pendingIdx = 1; break;
+                default: break;
+            }
+        }
+
         auto selPos = active.getSelectedPosition();
         view.render(
             model,
             active.getHoverPosition().value_or(Position(0, 0)),
             selPos.has_value() ? &selPos.value() : nullptr,
             active.getActionLabels(),
-            active.getCurrentMode()
+            active.getCurrentMode(),
+            pendingIdx
         );
 
         EndDrawing();

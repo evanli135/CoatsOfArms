@@ -19,7 +19,9 @@ public:
     ~GridView();
 
     /** Render the full grid for one frame. */
-    void render(const World& world, const Position* hoverPos, const Position* selectedPos);
+    void render(const World& world, const Position* hoverPos, const Position* selectedPos,
+                const std::vector<Position>& reachable  = {},
+                const std::vector<Position>& attackable = {});
 
     /** Pan the camera by (dpx, dpy) pixels, clamped to map bounds. */
     void scrollBy(int dpx, int dpy);
@@ -44,10 +46,12 @@ private:
     std::optional<Texture2D> terrainSprites[5];  // indexed by (int)Terrain
     std::optional<Texture2D> unitSprites[5];     // indexed by (int)UnitType
 
-    void renderCell(const World& world, const Position& pos, bool isHovered, bool isSelected);
+    void renderCell(const World& world, const Position& pos, bool isHovered, bool isSelected, bool isReachable, bool isAttackable);
     void renderTerrainLayer(const Tile& tile, int px, int py);
     void renderCityLayer(const Tile& tile, int px, int py);
     void renderUnitLayer(const World& world, const Tile& tile, int px, int py);
     void renderHoverLayer(int px, int py);
     void renderSelectionLayer(int px, int py);
+    void renderReachableLayer(int px, int py);
+    void renderAttackableLayer(int px, int py);
 };

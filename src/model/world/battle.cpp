@@ -30,7 +30,7 @@ std::optional<PlayerError> BattleSystem::battle(Position attackerPos, Position d
         world.getTileAt(defenderPos).removeUnit();
     }
 
-    attacker->setMoved(true);
+    attacker->setAttacked(true);
     return std::nullopt;
 }
 
@@ -42,6 +42,8 @@ vector<Position> BattleSystem::getAttackSnapshot(Position origin) const {
     }
 
     const Unit* attacker = world.getUnitAt(origin);
+    if (!attacker->canAttack()) return snapshot;
+
     for (int r = 0; r < Game::HEIGHT; r++) {
         for (int c = 0; c < Game::WIDTH; c++) {
             Position pos(r, c);

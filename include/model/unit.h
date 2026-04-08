@@ -153,7 +153,11 @@ public:
         return dmg;
     }
 
-    void setMoved(bool flag) { moved = flag; }
+    void setMoved(bool flag)    { moved    = flag; }
+    void setAttacked(bool flag) { attacked = flag; }
+
+    // True only when the unit has spent both its move and its attack this turn.
+    bool isExhausted() const { return moved && attacked; }
 
     /**
      * Sets health directly — used by command undo to restore pre-combat HP.

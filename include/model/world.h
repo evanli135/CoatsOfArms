@@ -122,6 +122,36 @@ public:
 
     void startGame();
 
+    /** Returns all tiles the unit at `origin` can legally move to this turn. */
+    std::vector<Position> getMovementSnapshot(Position origin) const {
+        return movementSystem.getMovementSnapshot(origin);
+    }
+
+    /** Returns all enemy tiles the unit at `origin` can legally attack this turn. */
+    std::vector<Position> getAttackSnapshot(Position origin) const {
+        return battleSystem.getAttackSnapshot(origin);
+    }
+
+    /** Read-only preview of a potential attack — no state is modified. */
+    struct CombatForecast {
+        int  damage;            // damage the attacker deals to the defender
+        int  defenderHpBefore;
+        int  defenderHpAfter;
+        bool lethal;            // attack kills the defender
+
+        int  retaliation;       // damage the defender retaliates (0 if defender dies)
+        int  attackerHpBefore;
+        int  attackerHpAfter;
+        bool attackerDies;      // retaliation kills the attacker
+
+        bool attackerCanAct;    // false when attacker has already attacked
+        bool inRange;           // false when defender is out of attack range
+    };
+
+    /** Returns a forecast for attacker at `from` hitting defender at `to`.
+     *  Always returns a value; check attackerCanAct and inRange for validity. */
+    CombatForecast getCombatForecast(Position from, Position to) const;
+
 private:
     vector<vector<Tile>> grid;
     vector<Player> players;

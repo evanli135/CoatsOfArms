@@ -62,6 +62,7 @@ void Controller::onRightClick() {
 
 std::optional<PlayerError> Controller::onEndTurn() {
     if (!myTurn) return PlayerError::OUTOFTURN;
+    mode->onDeselect();   // clear any pending selection / action before handing off
     endTurn();
     model.nextTurn();
     return std::nullopt;

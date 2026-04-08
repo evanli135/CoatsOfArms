@@ -29,9 +29,9 @@ std::optional<PlayerError> AttackCommand::execute(World& world) {
     const Unit* attacker = world.getUnitAt(attackerPos);
     const Unit* defender = world.getUnitAt(defenderPos);
 
-    if (!attacker || !attacker->sameOwner(player)) throw InternalError::UNITABSENCE;
-    if (!attacker->canMove())                       return PlayerError::UNITCANTMOVE;
-    if (!defender || defender->sameOwner(player))   throw InternalError::UNITABSENCE;
+    if (!attacker || !attacker->sameOwner(player)) return PlayerError::INVALIDTARGET;
+    if (!attacker->canAttack())                     return PlayerError::UNITCANTMOVE;
+    if (!defender || defender->sameOwner(player))   return PlayerError::INVALIDTARGET;
     if (!world.canAttack(attackerPos, defenderPos)) return PlayerError::OUTOFREACH;
 
     world.battle(attackerPos, defenderPos);
@@ -39,20 +39,25 @@ std::optional<PlayerError> AttackCommand::execute(World& world) {
 }
 
 void AttackCommand::undo(World& world) {
-    // Restore attacker's action.
-    if (Unit* attacker = world.getUnitAt(attackerPos)) {
-        attacker->setMoved(false);
-    }
-
+    // Restore defender (killed or damaged).
     if (world.hasUnitAt(defenderPos)) {
-        // Defender survived — restore HP to pre-combat value.
         world.getUnitAt(defenderPos)->setHealth(defenderHpBefore);
     } else {
-        // Defender was killed — respawn from snapshot if tile is free.
         try {
             world.addUnit(defenderPos, defenderSnapshot);
-        } catch (...) {
-            // Tile is occupied (another unit moved here) — partial undo only.
-        }
+        } catch (...) {}
+    }
+
+    // Restore attacker (may have died from retaliation).
+    if (world.hasUnitAt(attackerPos)) {
+        Unit* attacker = world.getUnitAt(attackerPos);
+        attacker->setAttacked(false);
+        attacker->setHealth(attackerHpBefore);
+    } else {
+        try {
+            world.addUnit(attackerPos, attackerSnapshot);
+            world.getUnitAt(attackerPos)->setAttacked(false);
+            world.getUnitAt(attackerPos)->setHealth(attackerHpBefore);
+        } catch (...) {}
     }
 }
