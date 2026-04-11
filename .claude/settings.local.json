@@ -3,7 +3,13 @@
     "allow": [
       "Bash(powershell -File scripts/build.ps1)",
       "Bash(powershell -ExecutionPolicy Bypass -File scripts/build.ps1)",
-      "Bash(taskkill /f /im revroyale.exe)"
+      "Bash(taskkill /f /im revroyale.exe)",
+      "Bash(\"C:/raylib/w64devkit/bin/g++.exe\" src/main.cpp src/model/world/world.cpp src/model/world/movement.cpp src/model/world/battle.cpp src/view/tui/tui.cpp src/view/gui.cpp src/view/grid_view.cpp src/view/panel_views.cpp src/view/terrain_sprites.cpp src/view/unit_sprites.cpp src/view/damage_indicators.cpp src/controller/command.cpp src/controller/keyboard.cpp src/controller/mouse.cpp src/controller/mode_handler.cpp src/controller/modes/tactic_mode.cpp src/controller/modes/training_mode.cpp src/controller/modes/building_mode.cpp -o bin/revroyale.exe -I\"include\" -I\"C:/raylib/raylib/include\" -L\"C:/raylib/raylib/lib\" -lraylib -lopengl32 -lgdi32 -lwinmm -std=c++17)",
+      "Read(//c/raylib/w64devkit/bin/**)",
+      "Bash(export PATH=\"C:/raylib/w64devkit/bin:$PATH\")",
+      "Bash(g++ src/main.cpp src/model/world/world.cpp src/model/world/movement.cpp src/model/world/battle.cpp src/view/tui/tui.cpp src/view/gui.cpp src/view/grid_view.cpp src/view/panel_views.cpp src/view/terrain_sprites.cpp src/view/unit_sprites.cpp src/view/damage_indicators.cpp src/controller/command.cpp src/controller/keyboard.cpp src/controller/mouse.cpp src/controller/mode_handler.cpp src/controller/modes/tactic_mode.cpp src/controller/modes/training_mode.cpp src/controller/modes/building_mode.cpp -o bin/revroyale.exe -I\"include\" -I\"C:/raylib/raylib/include\" -L\"C:/raylib/raylib/lib\" -lraylib -lopengl32 -lgdi32 -lwinmm -std=c++17)",
+      "Bash(powershell -Command ':*)",
+      "Bash(taskkill /F /IM revroyale.exe)"
     ]
   }
 }

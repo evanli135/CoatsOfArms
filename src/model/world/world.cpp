@@ -4,6 +4,7 @@
 #include "controller/error.h"
 #include "model/error.h"
 #include "model/unit.h"
+#include "model/city.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -98,6 +99,15 @@ void World::nextTurn() {
         }
     }
 
+    // Reset training flag for the new current player's cities.
+    for (const auto& cpos : cityPositions) {
+        if (City* city = getTileAt(cpos).getCityMutable()) {
+            if (city->hasOwner() && city->getOwner().getId() == currentPlayerId) {
+                city->setTrainedThisTurn(false);
+            }
+        }
+    }
+
     printCurrentPlayer(*this);
     notifyObservers(TurnChangeEvent{turn, players[currentPlayerIndex].getId()});
 }
@@ -181,6 +191,14 @@ bool World::hasUnitAt(const Position& pos) const {
     return getTileAt(pos).hasUnit();
 }
 
+bool World::allUnitsExhausted() const {
+    int pid = getCurrentPlayer().getId();
+    for (const auto& [id, unit] : units)
+        if (unit->getOwner().getId() == pid && !unit->isExhausted())
+            return false;
+    return true;
+}
+
 const Player& World::getCurrentPlayer() const {
     if (players.empty()) {
         throw std::logic_error("No players in game");
@@ -209,10 +227,12 @@ void World::battle(const Position& attackerPos, const Position& defenderPos) {
     int dmg = attacker->computeDamageAgainst(*defender);
     defender->lowerHP(dmg);
     attacker->setAttacked(true);
+    notifyObservers(DamageDealtEvent{defenderPos, dmg});
 
     // Defender retaliates with equal damage if still alive and attacker is in range.
     if (defender->isAlive() && battleSystem.canAttack(defenderPos, attackerPos)) {
         attacker->lowerHP(dmg);
+        notifyObservers(DamageDealtEvent{attackerPos, dmg});
     }
 
     // Remove dead units (defender first, then check attacker).
@@ -281,6 +301,45 @@ void World::moveUnit(const Position& from, const Position& to) {
     notifyObservers(UnitMovedEvent{unitId.value(), from, to});
 }
 
+void World::addCity(const Position& pos, City city, int ownerIdx) {
+    if (ownerIdx >= 0 && ownerIdx < (int)players.size()) {
+        city.setOwner(&players[ownerIdx]);
+    }
+    getTileAt(pos).setCity(std::move(city));
+    cityPositions.push_back(pos);
+}
+
+void World::removeUnit(const Position& pos) {
+    auto unitId = getTileAt(pos).removeUnit();
+    if (unitId.has_value()) {
+        units.erase(unitId.value());
+    }
+}
+
+std::optional<PlayerError> World::trainUnit(const Position& cityPos, UnitType type, const Player& player) {
+    if (!hasCityAt(cityPos)) return PlayerError::INVALIDTARGET;
+
+    City* city = getTileAt(cityPos).getCityMutable();
+    if (!city) return PlayerError::INVALIDTARGET;
+    if (!city->hasOwner() || city->getOwner().getId() != player.getId())
+        return PlayerError::INVALIDTARGET;
+    if (city->hasTrainedThisTurn()) return PlayerError::UNITCANTMOVE;
+    if (hasUnitAt(cityPos)) return PlayerError::INVALIDTARGET;
+
+    addUnit(cityPos, UnitFactory::create(type, player));
+    city->setTrainedThisTurn(true);
+    return std::nullopt;
+}
+
+std::optional<PlayerError> World::issueTrainCommand(const Position& cityPos, UnitType type, const Player& player) {
+    auto cmd = std::make_unique<TrainCommand>(cityPos, type, player);
+    auto result = cmd->execute(*this);
+    if (!result.has_value()) {
+        commandHistory.push_back(std::move(cmd));
+    }
+    return result;
+}
+
 void World::addUnit(const Position& pos, Unit unit) {
     if (!getTileAt(pos).isWalkable()) {
         throw std::invalid_argument("Cannot place unit on non-walkable tile");
@@ -335,6 +394,10 @@ World WorldFactory::create(WorldLayout layout, std::vector<Player> players) {
             world.addUnit(Position(5, 5),  UnitFactory::create(UnitType::WARRIOR, players[0]));
             world.addUnit(Position(8, 5),  UnitFactory::create(UnitType::WARRIOR, players[1]));
             world.addUnit(Position(8, 8),  UnitFactory::create(UnitType::RANGER,  players[1]));
+
+            // --- Cities ---
+            world.addCity(Position(1, 9),  City("Ironhaven", 4), 0);  // Player 1
+            world.addCity(Position(10, 2), City("Stonekeep", 4), 1);  // Player 2
             break;
         }
         case WorldLayout::EMPTY:

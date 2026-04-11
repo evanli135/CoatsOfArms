@@ -129,7 +129,7 @@ public:
           moved(false), attacked(false) {}
 
     bool isAlive()   const { return health > 0; }
-    bool canMove()   const { return !moved; }
+    bool canMove()   const { return !moved && !attacked; }
     bool canAttack() const { return !attacked; }
 
     UnitId          getId()        const { return id; }
@@ -156,8 +156,8 @@ public:
     void setMoved(bool flag)    { moved    = flag; }
     void setAttacked(bool flag) { attacked = flag; }
 
-    // True only when the unit has spent both its move and its attack this turn.
-    bool isExhausted() const { return moved && attacked; }
+    // True when the unit can neither move nor attack this turn.
+    bool isExhausted() const { return attacked; }
 
     /**
      * Sets health directly — used by command undo to restore pre-combat HP.
@@ -232,9 +232,9 @@ public:
 private:
     inline static uint32_t nextId = 0;
 
-    static constexpr UnitTemplate WARRIOR_TMPL = { 100, 20, 2, 1 };
-    static constexpr UnitTemplate SCOUT_TMPL   = {  50, 10, 3, 1 };
-    static constexpr UnitTemplate RANGER_TMPL  = {  75, 15, 2, 2 };
-    static constexpr UnitTemplate CAVALRY_TMPL = {  80, 25, 4, 1 };
-    static constexpr UnitTemplate MAGE_TMPL    = {  60, 30, 2, 2 };
+    static constexpr UnitTemplate WARRIOR_TMPL = { 50, 20, 2, 1 };
+    static constexpr UnitTemplate SCOUT_TMPL   = {  40, 10, 3, 1 };
+    static constexpr UnitTemplate RANGER_TMPL  = {  30, 15, 2, 2 };
+    static constexpr UnitTemplate CAVALRY_TMPL = {  50, 25, 4, 1 };
+    static constexpr UnitTemplate MAGE_TMPL    = {  25, 30, 2, 2 };
 };

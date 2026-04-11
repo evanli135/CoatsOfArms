@@ -1,6 +1,7 @@
 #include "controller/command.h"
 #include "model/world.h"
 #include "model/error.h"
+#include "model/city.h"
 
 // ---------------------------------------------------------------------------
 // MoveCommand
@@ -59,5 +60,24 @@ void AttackCommand::undo(World& world) {
             world.getUnitAt(attackerPos)->setAttacked(false);
             world.getUnitAt(attackerPos)->setHealth(attackerHpBefore);
         } catch (...) {}
+    }
+}
+
+
+// ---------------------------------------------------------------------------
+// TrainCommand
+// ---------------------------------------------------------------------------
+
+std::optional<PlayerError> TrainCommand::execute(World& world) {
+    return world.trainUnit(cityPos, unitType, player);
+}
+
+void TrainCommand::undo(World& world) {
+    // Remove the unit that was trained onto the city tile.
+    world.removeUnit(cityPos);
+
+    // Reset the city's training flag.
+    if (City* city = world.getTileAt(cityPos).getCityMutable()) {
+        city->setTrainedThisTurn(false);
     }
 }

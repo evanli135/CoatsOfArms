@@ -33,6 +33,10 @@ public:
 
     vector<Position> getMovementSnapshot(Position origin) const;
 
+    /** Returns the tile sequence of the shortest path from origin to destination,
+     *  or empty if unreachable. */
+    vector<Position> getPath(Position origin, Position destination) const;
+
 private:
     World& world;
 
@@ -64,6 +68,7 @@ private:
 class World {
     friend class MoveCommand;
     friend class AttackCommand;
+    friend class TrainCommand;
 
 public:
     World(std::vector<Player> players);
@@ -96,6 +101,9 @@ public:
     const Player& getCurrentPlayer() const;
     void nextTurn();
 
+    /** True when every unit belonging to the current player is exhausted. */
+    bool allUnitsExhausted() const;
+
     void moveUnit(const Position& from, const Position& to);
     void battle(const Position& attackerPos, const Position& defenderPos);
 
@@ -120,11 +128,28 @@ public:
 
     void addUnit(const Position& pos, const Unit unit);
 
+    /** Place a city on the given tile. If ownerIdx >= 0, sets ownership to that player. */
+    void addCity(const Position& pos, City city, int ownerIdx = -1);
+
+    /** Remove the unit at pos (no-op if empty). Used by TrainCommand::undo. */
+    void removeUnit(const Position& pos);
+
+    /** Train a unit at the city on cityPos. Called by TrainCommand::execute. */
+    std::optional<PlayerError> trainUnit(const Position& cityPos, UnitType type, const Player& player);
+
+    /** Create and execute a TrainCommand, adding it to history on success. */
+    std::optional<PlayerError> issueTrainCommand(const Position& cityPos, UnitType type, const Player& player);
+
     void startGame();
 
     /** Returns all tiles the unit at `origin` can legally move to this turn. */
     std::vector<Position> getMovementSnapshot(Position origin) const {
         return movementSystem.getMovementSnapshot(origin);
+    }
+
+    /** Returns the tile sequence of the shortest path from origin to destination. */
+    std::vector<Position> getPath(Position from, Position to) const {
+        return movementSystem.getPath(from, to);
     }
 
     /** Returns all enemy tiles the unit at `origin` can legally attack this turn. */
@@ -155,6 +180,7 @@ public:
 private:
     vector<vector<Tile>> grid;
     vector<Player> players;
+    vector<Position> cityPositions;
 
     unordered_map<UnitId, std::unique_ptr<Unit>> units = unordered_map<UnitId, std::unique_ptr<Unit>>();
 

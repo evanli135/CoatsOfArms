@@ -25,6 +25,7 @@ int main() {
 
     model.addObserver(&controller1);
     model.addObserver(&controller2);
+    model.addObserver(&view);
     model.startGame();
 
     Position keyHover(0, 0);

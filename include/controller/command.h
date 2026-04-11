@@ -89,3 +89,24 @@ private:
     int  attackerHpBefore;   // needed to undo retaliation damage
     Unit attackerSnapshot;   // full copy in case attacker dies from retaliation
 };
+
+
+// ---------------------------------------------------------------------------
+// TrainCommand
+// Trains a new unit at a city. Undo removes the trained unit and resets the
+// city's trainedThisTurn flag.
+// ---------------------------------------------------------------------------
+
+class TrainCommand : public GameCommand {
+public:
+    TrainCommand(Position cityPos, UnitType unitType, Player player)
+        : cityPos(cityPos), unitType(unitType), player(player) {}
+
+    std::optional<PlayerError> execute(World& world) override;
+    void undo(World& world) override;
+
+private:
+    Position cityPos;
+    UnitType unitType;
+    Player   player;
+};

@@ -19,8 +19,9 @@ namespace Sprites {
      *  For a drop shadow, call first with a dark/translucent tint at (+1, +2). */
     void unit(UnitType type, int px, int py, Color tint);
 
-    /** Draw a small castle icon in the top-right corner of a city tile. */
-    void city(int px, int py);
+    /** Draw a castle on a city tile, tinted by the owning player's colour.
+     *  Pass GRAY (or any neutral) for an unclaimed city. */
+    void city(int px, int py, Color factionColor);
 
     /** Draw a square mode-switch icon at (ix, iy) with side length sz. */
     void modeIcon(ControllerMode mode, int ix, int iy, int sz, bool active);

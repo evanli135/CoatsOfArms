@@ -21,7 +21,9 @@ public:
     /** Render the full grid for one frame. */
     void render(const World& world, const Position* hoverPos, const Position* selectedPos,
                 const std::vector<Position>& reachable  = {},
-                const std::vector<Position>& attackable = {});
+                const std::vector<Position>& attackable = {},
+                const std::vector<Position>& lethal     = {},
+                const std::vector<Position>& path       = {});
 
     /** Pan the camera by (dpx, dpy) pixels, clamped to map bounds. */
     void scrollBy(int dpx, int dpy);
@@ -46,12 +48,17 @@ private:
     std::optional<Texture2D> terrainSprites[5];  // indexed by (int)Terrain
     std::optional<Texture2D> unitSprites[5];     // indexed by (int)UnitType
 
-    void renderCell(const World& world, const Position& pos, bool isHovered, bool isSelected, bool isReachable, bool isAttackable);
+    void renderCell(const World& world, const Position& pos, bool isHovered, bool isSelected, bool isReachable, bool isAttackable, bool isLethal);
     void renderTerrainLayer(const Tile& tile, int px, int py);
     void renderCityLayer(const Tile& tile, int px, int py);
     void renderUnitLayer(const World& world, const Tile& tile, int px, int py);
     void renderHoverLayer(int px, int py);
     void renderSelectionLayer(int px, int py);
-    void renderReachableLayer(int px, int py);
+    void renderReachableLayer(int px, int py, bool isHovered);
     void renderAttackableLayer(int px, int py);
+    void renderAttackableRingsLayer(int px, int py);   // falling rings (drawn before unit)
+    void renderLethalLayer(int px, int py);
+    void renderAttackableHoverLayer(int px, int py);   // crossing swords (drawn after unit)
+    /** Draw path arrows over all tiles in one post-pass (called after the cell loop). */
+    void renderPathArrows(const std::vector<Position>& path);
 };

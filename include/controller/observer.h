@@ -30,12 +30,18 @@ struct UnitDiedEvent {
     Position pos;
 };
 
+/** A unit took damage (including retaliation). */
+struct DamageDealtEvent {
+    Position targetPos;
+    int      damage;
+};
+
 /**
  * Variant over all possible model events.
  * Use std::visit (or std::get_if) in onModelChanged() to handle only the
  * event types you care about and ignore the rest.
  */
-using ModelEvent = std::variant<TurnChangeEvent, UnitMovedEvent, UnitDiedEvent>;
+using ModelEvent = std::variant<TurnChangeEvent, UnitMovedEvent, UnitDiedEvent, DamageDealtEvent>;
 
 
 // ---------------------------------------------------------------------------

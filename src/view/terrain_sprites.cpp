@@ -176,33 +176,5 @@ void terrain(Terrain t, int px, int py) {
     }
 }
 
-// ---------------------------------------------------------------------------
-// city — small iso castle drawn above the tile centre.
-// ---------------------------------------------------------------------------
-void city(int px, int py) {
-    const int cx = px;
-    const Color wall = Color{218, 190, 124, 248};
-    const Color dark = Color{145, 112,  68, 248};
-    const Color gate = Color{ 55,  36,  18, 248};
-    const Color flag = Color{186,  52,  52, 248};
-
-    const int bx = cx - 10;
-    const int by = py - 26;
-
-    DrawRectangle(bx,    by+8,  20, 14, wall);
-    DrawLine(bx, by+12, bx+20, by+12, Color{0,0,0,28});
-    DrawRectangle(bx+1,  by+3,   5,  7, wall);
-    DrawRectangle(bx+8,  by+3,   5,  7, wall);
-    DrawRectangle(bx+14, by+3,   5,  7, wall);
-    DrawRectangle(bx+8,  by+5,   5,  6, dark);
-    DrawRectangle(bx+6,  by+14,  8,  8, gate);
-    DrawCircle(bx+10, by+14, 4, gate);
-    DrawLine(bx+10, by+3, bx+10, by-4, dark);
-    DrawTriangle(
-        {(float)(bx+10),(float)(by-4)},
-        {(float)(bx+10),(float)(by+1)},
-        {(float)(bx+15),(float)(by-2)},
-        flag);
-}
-
 } // namespace Sprites
+// city() is in city_sprite.cpp

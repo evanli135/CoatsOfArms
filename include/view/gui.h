@@ -4,8 +4,11 @@
 #include <vector>
 #include "controller/action.h"
 #include "controller/error.h"
+#include "controller/observer.h"
 #include "model/world.h"
 #include "model/util.h"
+#include "view/damage_indicators.h"
+#include "view/explosion.h"
 #include "view/layout.h"
 
 // Sub-views are owned by GUI via pointers; headers included in gui.cpp.
@@ -17,7 +20,7 @@ class ErrorView;
 // ---------------------------------------------------------------------------
 // GUI — top-level view.  Owns all sub-views and the screen layout.
 // ---------------------------------------------------------------------------
-class GUI {
+class GUI : public ModelObserver {
 public:
     GUI(int width, int height);
     ~GUI();
@@ -35,6 +38,8 @@ public:
 
     /** Grid tile under the cursor, or nullopt if off-grid. */
     std::optional<Position> pollHover() const;
+
+    void onModelChanged(const ModelEvent& event) override;
 
     void setError(PlayerError error);
     void clearError();
@@ -57,5 +62,14 @@ private:
     InformationView* informationView;
     ErrorView*       errorView;
 
+    DamageIndicatorSystem damageIndicators;
+    ExplosionSystem       explosions;
+
+    // Turn-change banner
+    float turnBannerAge      = 999.0f;   // seconds since last turn change (starts hidden)
+    int   turnBannerPlayerId = 0;
+    static constexpr float BANNER_DURATION = 2.2f;
+
     std::optional<Position> pixelToTile(int px, int py) const;
+    std::pair<int,int>      tileToPixel(const Position& pos) const;
 };

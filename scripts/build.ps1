@@ -1,17 +1,32 @@
 $RAYLIB = "C:/raylib/raylib"
 $COMPILER = "C:/raylib/w64devkit/bin/g++"
 
+# Ensure w64devkit tools (as, ld, etc.) are on PATH so g++ can find them.
+$env:PATH = "C:/raylib/w64devkit/bin;" + $env:PATH
+
 $SRC = @(
     "src/main.cpp",
+    # Model
     "src/model/world/world.cpp",
     "src/model/world/movement.cpp",
     "src/model/world/battle.cpp",
-    "src/view/tui/tui.cpp",
+    # View — grid
     "src/view/gui.cpp",
     "src/view/grid_view.cpp",
-    "src/view/panel_views.cpp",
+    # View — panels (one file per class)
+    "src/view/error_view.cpp",
+    "src/view/action_view.cpp",
+    "src/view/info_view.cpp",
+    # View — sprites (one file per sprite category)
     "src/view/terrain_sprites.cpp",
+    "src/view/city_sprite.cpp",
     "src/view/unit_sprites.cpp",
+    # View — effects
+    "src/view/damage_indicators.cpp",
+    "src/view/explosion.cpp",
+    # View — legacy TUI (kept for reference)
+    "src/view/tui/tui.cpp",
+    # Controller
     "src/controller/command.cpp",
     "src/controller/keyboard.cpp",
     "src/controller/mouse.cpp",

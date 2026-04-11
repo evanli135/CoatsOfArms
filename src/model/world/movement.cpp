@@ -8,6 +8,7 @@
 #include <limits>
 #include <vector>
 #include <unordered_map>
+#include <algorithm>
 #include <cassert>
 
 using std::vector, std::unordered_map;
@@ -189,6 +190,53 @@ std::optional<PlayerError> MovementSystem::move(Position origin, Position destin
     } else {
         throw std::logic_error("FATAL INTERNAL: No unit at the source position");
     }
+}
+
+// Returns the tile sequence of the shortest path from origin to destination.
+// Returns an empty vector if no path exists.
+vector<Position> MovementSystem::getPath(Position origin, Position destination) const {
+    if (origin == destination) return {origin};
+
+    const Unit* unit = world.getUnitAt(origin);
+    if (!unit) return {};
+
+    std::priority_queue<PathNode, vector<PathNode>, std::greater<PathNode>> pqueue;
+    unordered_map<Position, float>    bestCosts;
+    unordered_map<Position, Position> predecessor;
+
+    pqueue.push({0.0f, origin});
+    bestCosts[origin] = 0.0f;
+
+    while (!pqueue.empty()) {
+        PathNode current = pqueue.top();
+        pqueue.pop();
+
+        if (current.position == destination) break;
+        if (bestCosts.count(current.position) && bestCosts[current.position] < current.cost) continue;
+
+        for (const Position& neighbor : getNeighbors(current.position)) {
+            if (!canMoveThroughTile(origin, neighbor, destination)) continue;
+
+            float totalCost = current.cost + stepCost(*unit, world.getTileAt(neighbor));
+            if (!bestCosts.count(neighbor) || totalCost < bestCosts[neighbor]) {
+                bestCosts[neighbor] = totalCost;
+                predecessor.insert_or_assign(neighbor, current.position);
+                pqueue.push({totalCost, neighbor});
+            }
+        }
+    }
+
+    if (!predecessor.count(destination)) return {};
+
+    vector<Position> path;
+    Position cur = destination;
+    while (cur != origin) {
+        path.push_back(cur);
+        cur = predecessor.at(cur);
+    }
+    path.push_back(origin);
+    std::reverse(path.begin(), path.end());
+    return path;
 }
 
 vector<Position> MovementSystem::getMovementSnapshot(Position origin) const {

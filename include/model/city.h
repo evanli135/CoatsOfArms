@@ -58,8 +58,14 @@ public:
         upgradeLevel++;
     }
 
+    const string& getName() const { return name; }
+
+    bool hasTrainedThisTurn() const { return trainedThisTurn; }
+    void setTrainedThisTurn(bool v) { trainedThisTurn = v; }
+
 private:
     string name;
+    bool trainedThisTurn = false;
     unordered_map<BuildingType, int> buildings;
     const Player* owner;
     int buildingCapacity;

@@ -38,12 +38,16 @@ public:
     }
 
     const City* getCity() const {
-        if (!hasCity()) {
-            return nullptr;
-        }
+        if (!hasCity()) return nullptr;
         return &city.value();
     }
-    
+
+    City* getCityMutable() {
+        if (!hasCity()) return nullptr;
+        return &city.value();
+    }
+
+    void setCity(City c) { city = std::move(c); }
 
 
     std::optional<UnitId>& getUnit() {
