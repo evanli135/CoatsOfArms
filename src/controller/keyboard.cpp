@@ -4,6 +4,7 @@
 #include "controller/modes/building_mode.h"
 #include "model/world.h"
 #include "model/player.h"
+#include "model/unit.h"
 #include "raylib.h"
 
 #include <stdexcept>
@@ -29,8 +30,16 @@ std::optional<PlayerError> KeyboardController::applyKeyboardAction(KeyboardActio
         case KeyboardAction::DOWN:    return moveHover( 1, 0);
 
         // --- Tile interaction ---
-        case KeyboardAction::SELECT:
+        case KeyboardAction::SELECT: {
+            // Unit takes precedence over city: auto-switch to TACTIC when
+            // the hovered tile has a friendly unit and we're not already there.
+            if (model.hasUnitAt(hoverPosition)) {
+                const Unit* u = model.getUnitAt(hoverPosition);
+                if (u && u->sameOwner(player) && currentMode != ControllerMode::TACTIC)
+                    switchMode(ControllerMode::TACTIC);
+            }
             return mode->onTileSelect(hoverPosition);
+        }
 
         case KeyboardAction::UNSELECT:
             mode->onDeselect();

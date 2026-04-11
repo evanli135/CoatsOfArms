@@ -51,7 +51,7 @@ private:
     void renderCell(const World& world, const Position& pos, bool isHovered, bool isSelected, bool isReachable, bool isAttackable, bool isLethal);
     void renderTerrainLayer(const Tile& tile, int px, int py);
     void renderCityLayer(const Tile& tile, int px, int py);
-    void renderUnitLayer(const World& world, const Tile& tile, int px, int py);
+    void renderUnitLayer(const World& world, const Tile& tile, const Position& pos, int px, int py);
     void renderHoverLayer(int px, int py);
     void renderSelectionLayer(int px, int py);
     void renderReachableLayer(int px, int py, bool isHovered);

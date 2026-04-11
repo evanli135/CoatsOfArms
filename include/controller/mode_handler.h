@@ -105,6 +105,14 @@ public:
     virtual std::optional<ControllerAction> getPendingAction() const = 0;
 
     /**
+     * Returns the 0-based index of the currently highlighted action button,
+     * if any (used when a button was pressed before an origin was selected).
+     * Default returns nullopt; TrainingMode overrides to expose its pending
+     * unit-type index.
+     */
+    virtual std::optional<int> getPendingButtonIndex() const { return std::nullopt; }
+
+    /**
      * Returns the display labels for this mode's action buttons, in index order.
      *
      * The view calls this to know what buttons to render in the ActionView and

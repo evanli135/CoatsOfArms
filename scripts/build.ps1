@@ -10,6 +10,7 @@ $SRC = @(
     "src/model/world/world.cpp",
     "src/model/world/movement.cpp",
     "src/model/world/battle.cpp",
+    "src/model/world/training.cpp",
     # View — grid
     "src/view/gui.cpp",
     "src/view/grid_view.cpp",

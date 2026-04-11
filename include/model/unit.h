@@ -69,9 +69,17 @@ inline std::map<Status, bool> is_curse = {
 
 struct UnitTemplate {
     int maxHealth;
-    int dmg;
     int mov;
     int range;
+    // Bonus stats
+    int str;   // strength   — flat physical attack bonus
+    int spc;   // special    — flat non-physical (Mage) attack bonus
+    int def;   // defense    — flat physical damage reduction
+    int res;   // resistance — flat non-physical damage reduction
+    int prec;  // precision  — +2% hit chance per point (base 80%)
+    int agi;   // agility    — −2% hit chance per attacker point
+    int ini;   // initiative — bonus damage only when this unit initiates
+    int grd;   // guard      — flat reduction to any incoming attack
 };
 
 
@@ -135,21 +143,35 @@ public:
     UnitId          getId()        const { return id; }
     int             getHealth()    const { return health; }
     int             getMaxHealth() const { return tmpl->maxHealth; }
-    int             getDamage()    const { return tmpl->dmg; }
-    int             getMovement()  const { return tmpl->mov; }
-    int             getRange()     const { return tmpl->range; }
-    const Player&   getOwner()     const { return player; }
-    UnitType        getType()      const { return type; }
+    int             getMovement()   const { return tmpl->mov; }
+    int             getRange()      const { return tmpl->range; }
+    int             getStrength()   const { return tmpl->str;  }
+    int             getSpecial()    const { return tmpl->spc;  }
+    int             getDefense()    const { return tmpl->def;  }
+    int             getResistance() const { return tmpl->res;  }
+    int             getPrecision()  const { return tmpl->prec; }
+    int             getAgility()    const { return tmpl->agi;  }
+    int             getInitiative() const { return tmpl->ini;  }
+    int             getGuard()      const { return tmpl->grd;  }
+    const Player&   getOwner()      const { return player; }
+    UnitType        getType()       const { return type; }
 
     /**
-     * Walks the modifier chain and returns the effective damage against
-     * a specific defender. Starts from the base template damage.
+     * Computes effective damage against defender.
+     * isInitiator = true  when this unit starts the attack (applies initiative).
+     * isInitiator = false for retaliations.
+     * Physical damage uses strength/defense; Mage uses special/resistance.
+     * Guard always reduces incoming damage regardless of type.
      */
-    int computeDamageAgainst(const Unit& defender) const {
-        int dmg = tmpl->dmg;
-        for (const auto& mod : modifiers) {
+    int computeDamageAgainst(const Unit& defender, bool isInitiator = true) const {
+        bool isMage = (type == UnitType::MAGE);
+        int atk     = isMage ? tmpl->spc : tmpl->str;
+        int mit     = isMage ? defender.tmpl->res : defender.tmpl->def;
+        int raw     = atk + (isInitiator ? tmpl->ini : 0)
+                      - mit - defender.tmpl->grd;
+        int dmg = std::max(1, raw);
+        for (const auto& mod : modifiers)
             dmg = mod->modify(dmg, *this, defender);
-        }
         return dmg;
     }
 
@@ -158,6 +180,8 @@ public:
 
     // True when the unit can neither move nor attack this turn.
     bool isExhausted() const { return attacked; }
+
+    bool hasMoved()    const { return moved; }
 
     /**
      * Sets health directly — used by command undo to restore pre-combat HP.
@@ -232,9 +256,10 @@ public:
 private:
     inline static uint32_t nextId = 0;
 
-    static constexpr UnitTemplate WARRIOR_TMPL = { 50, 20, 2, 1 };
-    static constexpr UnitTemplate SCOUT_TMPL   = {  40, 10, 3, 1 };
-    static constexpr UnitTemplate RANGER_TMPL  = {  30, 15, 2, 2 };
-    static constexpr UnitTemplate CAVALRY_TMPL = {  50, 25, 4, 1 };
-    static constexpr UnitTemplate MAGE_TMPL    = {  25, 30, 2, 2 };
+    //                                           hp   mov  rng  str  spc  def  res  prec agi  ini  grd
+    static constexpr UnitTemplate WARRIOR_TMPL = { 50,  2,   1,   4,   1,   3,   1,   4,   2,   2,   4 };
+    static constexpr UnitTemplate SCOUT_TMPL   = { 40,  3,   1,   2,   2,   2,   3,   6,   7,   2,   2 };
+    static constexpr UnitTemplate RANGER_TMPL  = { 35,  3,   3,   3,   1,   1,   2,   6,   5,   3,   2 };
+    static constexpr UnitTemplate CAVALRY_TMPL = { 50,  4,   1,   4,   1,   4,   1,   3,   1,   4,   3 };
+    static constexpr UnitTemplate MAGE_TMPL    = { 25,  2,   2,   1,   5,   0,   3,   5,   3,   4,   1 };
 };

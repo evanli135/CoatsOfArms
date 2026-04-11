@@ -107,23 +107,72 @@ void GridView::renderCityLayer(const Tile& tile, int px, int py) {
         ? playerColor(city->getOwner().getId())
         : Color{160, 160, 160, 255};   // neutral grey for unclaimed
     Sprites::city(px, py, factionColor);
+
+    if (!city->isTraining()) return;
+    const TrainingSlot* slot = city->getTrainingSlot();
+
+    // Ghost unit — only visible when no real unit is blocking the tile.
+    const int ghostPy = py - ISO_HALF_H;
+    if (!tile.hasUnit()) {
+        // Semi-transparent grayed silhouette of the queued unit type.
+        Sprites::unit(slot->unitType, px + 1, ghostPy + 1, Color{0,   0,   0,   35});
+        Sprites::unit(slot->unitType, px,     ghostPy,     Color{140, 140, 155, 85});
+    }
+
+    // Circular countdown arc above the ghost / castle flag.
+    // 0 turns remaining → full circle (ready), 2 turns remaining → empty.
+    const float progress = 1.0f - slot->turnsRemaining / 2.0f;  // 0.0 → 1.0
+    const float t        = (float)GetTime();
+    const float pulse    = 0.5f + 0.5f * sinf(t * 3.0f);
+    const Vector2 arcCenter = { (float)px, (float)(ghostPy - 16) };
+    const float innerR = 7.0f, outerR = 11.0f;
+
+    // Background ring (full circle, dark)
+    DrawRing(arcCenter, innerR, outerR, 0.0f, 360.0f, 24,
+             Color{30, 30, 40, 180});
+
+    // Progress arc: sweeps from top (-90°) clockwise
+    if (progress > 0.01f) {
+        float endAngle = -90.0f + progress * 360.0f;
+        Color arcCol   = slot->turnsRemaining == 0
+            ? Color{80,  220, 100, (unsigned char)(200 + 55 * pulse)}  // ready: bright green
+            : Color{100, 190, 255, 200};                               // in progress: blue
+        DrawRing(arcCenter, innerR, outerR, -90.0f, endAngle,
+                 std::max(4, (int)(progress * 24)), arcCol);
+    }
+
+    // Small tick at 12 o'clock
+    DrawCircleV({arcCenter.x, arcCenter.y - outerR - 1.5f}, 1.5f,
+                Color{200, 200, 220, 160});
 }
 
-void GridView::renderUnitLayer(const World& world, const Tile& tile, int px, int py) {
+void GridView::renderUnitLayer(const World& world, const Tile& tile, const Position& pos, int px, int py) {
     if (!tile.hasUnit()) return;
     const Unit* u = world.getUnit(tile.getUnit().value());
     if (!u) return;
 
+    const bool isCurrentPlayer = (u->getOwner().getId() == world.getCurrentPlayer().getId());
+
+    // A unit is "effectively done" when it truly has nothing left to do this turn:
+    // either it has attacked, or it has moved and no enemy is within attack range.
+    bool effectivelyDone = false;
+    if (isCurrentPlayer) {
+        if (u->isExhausted()) {
+            effectivelyDone = true;
+        } else if (u->hasMoved()) {
+            effectivelyDone = world.getAttackSnapshot(pos).empty();
+        }
+    }
+
     Color tint = playerColor(u->getOwner().getId());
-    bool isEnemy = (u->getOwner().getId() != world.getCurrentPlayer().getId());
-    if (isEnemy) {
+    if (!isCurrentPlayer) {
         // Enemy units are consistently dimmed
         tint.r = (unsigned char)((tint.r + 40) / 2);
         tint.g = (unsigned char)((tint.g + 40) / 2);
         tint.b = (unsigned char)((tint.b + 40) / 2);
         tint.a = 160;
-    } else if (u->isExhausted()) {
-        // Current player's exhausted units are further grayed out
+    } else if (effectivelyDone) {
+        // Current player's done units are grayed out
         tint.r = (unsigned char)((tint.r + 80) / 2);
         tint.g = (unsigned char)((tint.g + 80) / 2);
         tint.b = (unsigned char)((tint.b + 80) / 2);
@@ -134,9 +183,8 @@ void GridView::renderUnitLayer(const World& world, const Tile& tile, int px, int
     // rather than sitting at the front corner.
     const int unitPy = py - ISO_HALF_H;
 
-    // "Selectable" indicators for current player's ready units
-    bool isSelectable = (u->canMove() || u->canAttack()) &&
-                        (u->getOwner().getId() == world.getCurrentPlayer().getId());
+    // "Selectable" indicators for current player's active units
+    bool isSelectable = isCurrentPlayer && !effectivelyDone;
     if (isSelectable) {
         float t     = (float)GetTime();
         float pulse = 0.5f + 0.5f * sinf(t * 3.0f);
@@ -450,7 +498,7 @@ void GridView::renderCell(const World& world, const Position& pos,
     if (isSelected)                        renderSelectionLayer(px, py);
 
     // ── Unit sprite (always on top of tile decorations) ───────────────────────
-    renderUnitLayer(world, tile, px, py);
+    renderUnitLayer(world, tile, pos, px, py);
 
     // ── Above-unit overlays ───────────────────────────────────────────────────
     if (isLethal)                          renderLethalLayer(px, py);

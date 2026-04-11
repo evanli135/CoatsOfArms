@@ -111,6 +111,11 @@ int main() {
                 default: break;
             }
         }
+        // Mode-specific pending button (e.g. training mode button-first flow)
+        if (pendingIdx == -1) {
+            if (auto pb = active.getPendingButtonIndex())
+                pendingIdx = *pb;
+        }
 
         auto selPos = active.getSelectedPosition();
         view.render(

@@ -73,11 +73,8 @@ std::optional<PlayerError> TrainCommand::execute(World& world) {
 }
 
 void TrainCommand::undo(World& world) {
-    // Remove the unit that was trained onto the city tile.
-    world.removeUnit(cityPos);
-
-    // Reset the city's training flag.
+    // Training is queued (no unit has spawned yet), so just cancel the order.
     if (City* city = world.getTileAt(cityPos).getCityMutable()) {
-        city->setTrainedThisTurn(false);
+        city->clearTraining();
     }
 }

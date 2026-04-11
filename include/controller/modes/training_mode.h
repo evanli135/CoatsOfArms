@@ -74,7 +74,9 @@ public:
     /** Always returns nullopt — TRAINING mode does not use a pending ControllerAction. */
     std::optional<ControllerAction> getPendingAction() const override { return std::nullopt; }
 
-    /** Returns the trainable unit types. Labels are placeholders until training is implemented. */
+    /** Returns the selected unit-type button index (button-first flow), or nullopt. */
+    std::optional<int> getPendingButtonIndex() const override { return pendingUnitIndex; }
+
     std::vector<std::string> getActionLabels() const override {
         return {"Warrior", "Scout", "Ranger", "Cavalry", "Mage"};
     }
@@ -83,7 +85,8 @@ private:
     World& world;
     const Player& player;
 
-    std::optional<Position> selection;
+    std::optional<Position> selection;       // city chosen first
+    std::optional<int>      pendingUnitIndex; // unit type chosen first
 
     /**
      * Phase 1: validates and records the origin city tile.

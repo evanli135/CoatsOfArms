@@ -4,6 +4,7 @@
 #include "controller/modes/building_mode.h"
 #include "model/world.h"
 #include "model/player.h"
+#include "model/unit.h"
 #include "raylib.h"
 
 Controller::Controller(World& model, const Player& player)
@@ -19,6 +20,13 @@ std::optional<PlayerError> Controller::onClick(ClickTarget click) {
     return std::visit([&](auto&& target) -> std::optional<PlayerError> {
         using T = std::decay_t<decltype(target)>;
         if constexpr (std::is_same_v<T, Position>) {
+            // Unit always takes precedence over city.  If the player clicks a tile
+            // that has a friendly unit while not in TACTIC mode, auto-switch first.
+            if (model.hasUnitAt(target)) {
+                const Unit* u = model.getUnitAt(target);
+                if (u && u->sameOwner(player) && currentMode != ControllerMode::TACTIC)
+                    switchMode(ControllerMode::TACTIC);
+            }
             return mode->onTileSelect(target);
         } else if constexpr (std::is_same_v<T, int>) {
             return mode->onActionButton(target);

@@ -129,6 +129,13 @@ public:
     std::optional<ControllerAction> getPendingAction() const { return mode->getPendingAction(); }
 
     /**
+     * Returns the highlighted button index set by the active mode (e.g. in
+     * training mode when a unit type is selected before a city).
+     * Delegates to mode->getPendingButtonIndex().
+     */
+    std::optional<int> getPendingButtonIndex() const { return mode->getPendingButtonIndex(); }
+
+    /**
      * Returns the action button labels for the active mode.
      * Delegates to mode->getActionLabels(). Pass to GUI::pollClick() and
      * GUI::render() each frame so the view knows what buttons to display.

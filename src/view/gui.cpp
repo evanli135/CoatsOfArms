@@ -188,6 +188,43 @@ void GUI::render(const World& world,
                  Color{240, 240, 255, a});
     }
 
+    // Training-started toast (bottom-right corner, brief)
+    trainingToastAge += GetFrameTime();
+    if (trainingToastAge < TOAST_DURATION) {
+        float t = trainingToastAge / TOAST_DURATION;
+        float alpha;
+        if      (t < 0.12f) alpha = t / 0.12f;
+        else if (t < 0.65f) alpha = 1.0f;
+        else                alpha = 1.0f - (t - 0.65f) / 0.35f;
+        alpha = std::max(0.0f, std::min(1.0f, alpha));
+        unsigned char a = (unsigned char)(alpha * 255.0f);
+
+        static const char* UNIT_NAMES[] = {
+            "Warrior", "Scout", "Ranger", "Cavalry", "Mage" };
+        int utIdx = (int)trainingToastUnitType;
+        const char* uname = (utIdx >= 0 && utIdx < 5) ? UNIT_NAMES[utIdx] : "Unit";
+        const char* line1 = "TRAINING STARTED";
+        const char* line2 = TextFormat("%s queued - 2 turns", uname);
+
+        const Color pc = playerColor(trainingToastPlayerId);
+        const int   tw = 320, th = 62;
+        const int   tx = screenWidth / 2 - tw / 2;
+        const int   ty = 52;   // upper-center, just below the title bar
+
+        DrawRectangle(tx, ty, tw, th, Color{10, 22, 14, (unsigned char)(a * 0.9f)});
+        DrawRectangle(tx, ty, tw, 3,  Color{pc.r, pc.g, pc.b, a});
+        DrawRectangleLines(tx, ty, tw, th, Color{pc.r, pc.g, pc.b, a});
+
+        int l1w = MeasureText(line1, 13);
+        DrawText(line1, tx + tw/2 - l1w/2, ty + 10, 13,
+                 Color{(unsigned char)(160 + 80*(pc.r/255.0f)),
+                       (unsigned char)(200 + 55*(pc.g/255.0f)),
+                       160, a});
+        int l2w = MeasureText(line2, 16);
+        DrawText(line2, tx + tw/2 - l2w/2, ty + 30, 16,
+                 Color{230, 230, 210, a});
+    }
+
     DrawFPS(10, 10);
 }
 
@@ -249,18 +286,31 @@ void GUI::onModelChanged(const ModelEvent& event) {
 
         if constexpr (std::is_same_v<T, DamageDealtEvent>) {
             auto [px, py] = tileToPixel(e.targetPos);
-            char buf[16];
-            std::snprintf(buf, sizeof(buf), "%d", e.damage);
             float jitter = (float)((px * 1234567 + py * 7654321) % 21) - 10.0f;
-            damageIndicators.spawn(buf,
-                (float)px + jitter,
-                (float)(py - ISO_HALF_H - 8),
-                Color{255, 80, 80, 255});
+            if (e.missed) {
+                damageIndicators.spawn("MISS",
+                    (float)px + jitter,
+                    (float)(py - ISO_HALF_H - 8),
+                    Color{200, 200, 80, 255});
+            } else {
+                char buf[16];
+                std::snprintf(buf, sizeof(buf), "%d", e.damage);
+                damageIndicators.spawn(buf,
+                    (float)px + jitter,
+                    (float)(py - ISO_HALF_H - 8),
+                    Color{255, 80, 80, 255});
+            }
         }
 
         if constexpr (std::is_same_v<T, TurnChangeEvent>) {
             turnBannerAge      = 0.0f;
             turnBannerPlayerId = e.newPlayerId;
+        }
+
+        if constexpr (std::is_same_v<T, TrainingStartedEvent>) {
+            trainingToastAge      = 0.0f;
+            trainingToastUnitType = e.unitType;
+            trainingToastPlayerId = e.ownerId;
         }
 
         if constexpr (std::is_same_v<T, UnitDiedEvent>) {

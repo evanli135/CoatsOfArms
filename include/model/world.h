@@ -65,10 +65,40 @@ private:
     int shortestPath(Position origin, Position destination) const;
 };
 
+// ---------------------------------------------------------------------------
+// TrainingSystem — manages the 2-turn unit production queue.
+//
+// One TrainingSlot per city tracks what is being trained and how many of the
+// owning player's turns remain.  advanceTraining() is called at the start of
+// each player's turn to tick slots and spawn completed units.
+// ---------------------------------------------------------------------------
+class TrainingSystem {
+public:
+    explicit TrainingSystem(World& world) : world(world) {}
+
+    static constexpr int MAX_UNITS_PER_PLAYER = 5;
+
+    /** Queue a unit at cityPos for player.  Validates ownership, cap, and
+     *  that the city isn't already training.  Returns nullopt on success. */
+    std::optional<PlayerError> beginTraining(const Position& cityPos,
+                                             UnitType type,
+                                             const Player& player);
+
+    /** Tick all training slots owned by playerId; spawn any that reach 0. */
+    void advanceTraining(int playerId);
+
+    /** Fielded + in-training units for this player. */
+    int countUnitsForPlayer(int playerId) const;
+
+private:
+    World& world;
+};
+
 class World {
     friend class MoveCommand;
     friend class AttackCommand;
     friend class TrainCommand;
+    friend class TrainingSystem;
 
 public:
     World(std::vector<Player> players);
@@ -140,6 +170,11 @@ public:
     /** Create and execute a TrainCommand, adding it to history on success. */
     std::optional<PlayerError> issueTrainCommand(const Position& cityPos, UnitType type, const Player& player);
 
+    /** Fielded + in-training unit count for the given player id. */
+    int countUnitsForPlayer(int playerId) const {
+        return trainingSystem.countUnitsForPlayer(playerId);
+    }
+
     void startGame();
 
     /** Returns all tiles the unit at `origin` can legally move to this turn. */
@@ -159,18 +194,21 @@ public:
 
     /** Read-only preview of a potential attack — no state is modified. */
     struct CombatForecast {
-        int  damage;            // damage the attacker deals to the defender
+        int  damage;            // damage dealt if initial strike hits
         int  defenderHpBefore;
-        int  defenderHpAfter;
-        bool lethal;            // attack kills the defender
+        int  defenderHpAfter;   // HP after hit (assume hit case for preview)
+        bool lethal;            // attack kills the defender if it connects
 
-        int  retaliation;       // damage the defender retaliates (0 if defender dies)
+        int  retaliation;       // retaliation damage if defender hits back
         int  attackerHpBefore;
         int  attackerHpAfter;
-        bool attackerDies;      // retaliation kills the attacker
+        bool attackerDies;
 
         bool attackerCanAct;    // false when attacker has already attacked
         bool inRange;           // false when defender is out of attack range
+
+        int  attackHitChance;        // % probability initial strike lands (25–95)
+        int  retaliationHitChance;   // % probability retaliation lands (25–95)
     };
 
     /** Returns a forecast for attacker at `from` hitting defender at `to`.
@@ -194,8 +232,12 @@ private:
 
     BattleSystem   battleSystem;
     MovementSystem movementSystem;
+    TrainingSystem trainingSystem;
 
     std::vector<std::unique_ptr<GameCommand>> commandHistory;
+
+    /** Hit chance (25–95%) for attacker vs defender based on precision/agility. */
+    static int calcHitChance(const Unit& attacker, const Unit& defender);
 };
 
 

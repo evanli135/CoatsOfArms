@@ -30,10 +30,18 @@ struct UnitDiedEvent {
     Position pos;
 };
 
-/** A unit took damage (including retaliation). */
+/** A unit took damage (including retaliation), or an attack missed. */
 struct DamageDealtEvent {
     Position targetPos;
     int      damage;
+    bool     missed = false;  // true when the attack roll failed — no HP lost
+};
+
+/** A city began producing a unit (training queue started). */
+struct TrainingStartedEvent {
+    UnitType unitType;
+    int      ownerId;
+    Position cityPos;
 };
 
 /**
@@ -41,7 +49,8 @@ struct DamageDealtEvent {
  * Use std::visit (or std::get_if) in onModelChanged() to handle only the
  * event types you care about and ignore the rest.
  */
-using ModelEvent = std::variant<TurnChangeEvent, UnitMovedEvent, UnitDiedEvent, DamageDealtEvent>;
+using ModelEvent = std::variant<TurnChangeEvent, UnitMovedEvent, UnitDiedEvent,
+                                DamageDealtEvent, TrainingStartedEvent>;
 
 
 // ---------------------------------------------------------------------------

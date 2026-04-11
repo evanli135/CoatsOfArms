@@ -8,6 +8,13 @@
 
 #include <iostream>
 #include <stdexcept>
+#include <cstdlib>
+#include <algorithm>
+
+int World::calcHitChance(const Unit& attacker, const Unit& defender) {
+    int pct = 80 + (attacker.getPrecision() - defender.getAgility()) * 2;
+    return std::max(25, std::min(95, pct));
+}
 
 void printCurrentPlayer(const World& world) {
     const Player& currentPlayer = world.getCurrentPlayer();
@@ -23,7 +30,8 @@ World::World(std::vector<Player> players)
       players(players),
       currentPlayerIndex(0),
       battleSystem(*this),
-      movementSystem(*this)
+      movementSystem(*this),
+      trainingSystem(*this)
 {
     if (players.size() < 2) {
         throw std::logic_error("Not enough players\n");
@@ -40,7 +48,8 @@ World::World(World&& other) noexcept
       observers(std::move(other.observers)),
       commandHistory(std::move(other.commandHistory)),
       battleSystem(*this),       // re-bind to the new object
-      movementSystem(*this)      // re-bind to the new object
+      movementSystem(*this),     // re-bind to the new object
+      trainingSystem(*this)      // re-bind to the new object
 {}
 
 Unit* World::getUnitAt(const Position& pos) const {
@@ -99,14 +108,8 @@ void World::nextTurn() {
         }
     }
 
-    // Reset training flag for the new current player's cities.
-    for (const auto& cpos : cityPositions) {
-        if (City* city = getTileAt(cpos).getCityMutable()) {
-            if (city->hasOwner() && city->getOwner().getId() == currentPlayerId) {
-                city->setTrainedThisTurn(false);
-            }
-        }
-    }
+    // Tick training queues and spawn any completed units for the new player.
+    trainingSystem.advanceTraining(currentPlayerId);
 
     printCurrentPlayer(*this);
     notifyObservers(TurnChangeEvent{turn, players[currentPlayerIndex].getId()});
@@ -193,9 +196,23 @@ bool World::hasUnitAt(const Position& pos) const {
 
 bool World::allUnitsExhausted() const {
     int pid = getCurrentPlayer().getId();
-    for (const auto& [id, unit] : units)
-        if (unit->getOwner().getId() == pid && !unit->isExhausted())
-            return false;
+    for (int r = 0; r < Game::HEIGHT; ++r) {
+        for (int c = 0; c < Game::WIDTH; ++c) {
+            Position pos(r, c);
+            const Tile& tile = getTileAt(pos);
+            if (!tile.hasUnit()) continue;
+            const Unit* u = getUnit(tile.getUnit().value());
+            if (!u || u->getOwner().getId() != pid) continue;
+            if (u->isExhausted()) continue;      // attacked → done
+            if (u->hasMoved()) {
+                // Moved but not attacked — only active if there are reachable targets
+                if (!battleSystem.getAttackSnapshot(pos).empty()) return false;
+            } else {
+                // Hasn't moved or attacked → still active
+                return false;
+            }
+        }
+    }
     return true;
 }
 
@@ -212,7 +229,7 @@ bool World::canAttack(const Position& from, const Position& to) {
     }
 
     const Unit* attacker = getUnitAt(from);
-    return getDistance(from, to) <= attacker->getRange() + attacker->getMovement();
+    return getDistance(from, to) <= attacker->getRange();
 }
 
 void World::battle(const Position& attackerPos, const Position& defenderPos) {
@@ -223,19 +240,31 @@ void World::battle(const Position& attackerPos, const Position& defenderPos) {
         throw std::logic_error("Battle requires units at both positions");
     }
 
-    // Attacker strikes defender.
-    int dmg = attacker->computeDamageAgainst(*defender);
-    defender->lowerHP(dmg);
+    // ── Initial strike ──────────────────────────────────────────────────────
+    bool hit = (std::rand() % 100) < calcHitChance(*attacker, *defender);
     attacker->setAttacked(true);
-    notifyObservers(DamageDealtEvent{defenderPos, dmg});
 
-    // Defender retaliates with equal damage if still alive and attacker is in range.
-    if (defender->isAlive() && battleSystem.canAttack(defenderPos, attackerPos)) {
-        attacker->lowerHP(dmg);
-        notifyObservers(DamageDealtEvent{attackerPos, dmg});
+    if (hit) {
+        int dmg = attacker->computeDamageAgainst(*defender, true);  // initiator
+        defender->lowerHP(dmg);
+        notifyObservers(DamageDealtEvent{defenderPos, dmg, false});
+    } else {
+        notifyObservers(DamageDealtEvent{defenderPos, 0, true});    // miss
     }
 
-    // Remove dead units (defender first, then check attacker).
+    // ── Retaliation ─────────────────────────────────────────────────────────
+    if (defender->isAlive() && battleSystem.canAttack(defenderPos, attackerPos)) {
+        bool retHit = (std::rand() % 100) < calcHitChance(*defender, *attacker);
+        if (retHit) {
+            int retDmg = defender->computeDamageAgainst(*attacker, false); // not initiating
+            attacker->lowerHP(retDmg);
+            notifyObservers(DamageDealtEvent{attackerPos, retDmg, false});
+        } else {
+            notifyObservers(DamageDealtEvent{attackerPos, 0, true});       // miss
+        }
+    }
+
+    // ── Remove dead units (defender first, then attacker) ───────────────────
     if (!defender->isAlive()) {
         auto defenderId = getTileAt(defenderPos).removeUnit();
         if (defenderId.has_value()) {
@@ -266,19 +295,22 @@ World::CombatForecast World::getCombatForecast(Position from, Position to) const
     f.inRange          = battleSystem.canAttack(from, to);
     f.defenderHpBefore = defender->getHealth();
     f.attackerHpBefore = attacker->getHealth();
+    f.attackHitChance  = calcHitChance(*attacker, *defender);
 
     if (f.attackerCanAct && f.inRange) {
-        f.damage          = attacker->computeDamageAgainst(*defender);
+        f.damage          = attacker->computeDamageAgainst(*defender, true);  // initiator
         f.defenderHpAfter = std::max(0, defender->getHealth() - f.damage);
         f.lethal          = (f.defenderHpAfter == 0);
 
         // Retaliation: defender hits back if it survives and attacker is in range.
         bool defenderCanRetaliate = !f.lethal && battleSystem.canAttack(to, from);
         if (defenderCanRetaliate) {
-            f.retaliation     = f.damage;
+            f.retaliationHitChance = calcHitChance(*defender, *attacker);
+            f.retaliation     = defender->computeDamageAgainst(*attacker, false); // not initiating
             f.attackerHpAfter = std::max(0, attacker->getHealth() - f.retaliation);
             f.attackerDies    = (f.attackerHpAfter == 0);
         } else {
+            f.retaliationHitChance = 0;
             f.retaliation     = 0;
             f.attackerHpAfter = attacker->getHealth();
             f.attackerDies    = false;
@@ -317,18 +349,7 @@ void World::removeUnit(const Position& pos) {
 }
 
 std::optional<PlayerError> World::trainUnit(const Position& cityPos, UnitType type, const Player& player) {
-    if (!hasCityAt(cityPos)) return PlayerError::INVALIDTARGET;
-
-    City* city = getTileAt(cityPos).getCityMutable();
-    if (!city) return PlayerError::INVALIDTARGET;
-    if (!city->hasOwner() || city->getOwner().getId() != player.getId())
-        return PlayerError::INVALIDTARGET;
-    if (city->hasTrainedThisTurn()) return PlayerError::UNITCANTMOVE;
-    if (hasUnitAt(cityPos)) return PlayerError::INVALIDTARGET;
-
-    addUnit(cityPos, UnitFactory::create(type, player));
-    city->setTrainedThisTurn(true);
-    return std::nullopt;
+    return trainingSystem.beginTraining(cityPos, type, player);
 }
 
 std::optional<PlayerError> World::issueTrainCommand(const Position& cityPos, UnitType type, const Player& player) {
@@ -391,9 +412,13 @@ World WorldFactory::create(WorldLayout layout, std::vector<Player> players) {
             set(10, 9, Terrain::FOREST);
 
             // --- Units ---
-            world.addUnit(Position(5, 5),  UnitFactory::create(UnitType::WARRIOR, players[0]));
-            world.addUnit(Position(8, 5),  UnitFactory::create(UnitType::WARRIOR, players[1]));
-            world.addUnit(Position(8, 8),  UnitFactory::create(UnitType::RANGER,  players[1]));
+            // Blue team
+            world.addUnit(Position(4, 3),  UnitFactory::create(UnitType::WARRIOR, players[0]));
+            world.addUnit(Position(5, 6),  UnitFactory::create(UnitType::MAGE,    players[0]));
+            // Red team
+            world.addUnit(Position(8, 4),  UnitFactory::create(UnitType::SCOUT,   players[1]));
+            world.addUnit(Position(7, 8),  UnitFactory::create(UnitType::RANGER,  players[1]));
+            world.addUnit(Position(9, 6),  UnitFactory::create(UnitType::CAVALRY, players[1]));
 
             // --- Cities ---
             world.addCity(Position(1, 9),  City("Ironhaven", 4), 0);  // Player 1

@@ -145,10 +145,10 @@ void TUI::renderInfoPanel(const World& world, const Unit* selectedUnit, int curr
         currentY += lineHeight;
         
         // Stats in a horizontal layout to save vertical space
-        DrawText(TextFormat("Owner: P%d | HP: %d | ATK: %d | MOV: %d | Can Move: %c", 
+        DrawText(TextFormat("Owner: P%d | HP: %d | STR: %d | MOV: %d | Can Move: %c",
                 selectedUnit->getOwner().getId() + 1,
                 selectedUnit->getHealth(),
-                selectedUnit->getDamage(),
+                selectedUnit->getStrength(),
                 selectedUnit->getMovement(),
                 selectedUnit->canMove() ? 'Y' : 'N'),
                 panelX, currentY, 18, LIGHTGRAY);

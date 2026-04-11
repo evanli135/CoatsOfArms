@@ -66,9 +66,15 @@ private:
     ExplosionSystem       explosions;
 
     // Turn-change banner
-    float turnBannerAge      = 999.0f;   // seconds since last turn change (starts hidden)
+    float turnBannerAge      = 999.0f;
     int   turnBannerPlayerId = 0;
     static constexpr float BANNER_DURATION = 2.2f;
+
+    // Training-started toast
+    float    trainingToastAge      = 999.0f;
+    UnitType trainingToastUnitType = UnitType::WARRIOR;
+    int      trainingToastPlayerId = 0;
+    static constexpr float TOAST_DURATION = 2.0f;
 
     std::optional<Position> pixelToTile(int px, int py) const;
     std::pair<int,int>      tileToPixel(const Position& pos) const;
