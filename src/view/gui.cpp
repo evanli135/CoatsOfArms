@@ -5,6 +5,7 @@
 #include "view/layout.h"
 #include "model/util.h"
 #include "raylib.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -111,17 +112,28 @@ void GUI::render(const World& world,
         }
     }
 
-    // Grid
-    gridView->render(frameLayout_, world, &hoverPos, selectedPos, reachable, attackable, lethal, path);
+    // Map viewport: clip + zoom (trackpad / wheel). UI stays unscaled.
+    {
+        int playW = frameLayout_.infoPanelX - LEFT_UI_RESERVE;
+        int playH = (frameLayout_.screenH - BOTTOM_MARGIN) - TITLE_TOP_MARGIN;
+        playW = std::max(1, playW);
+        playH = std::max(1, playH);
+        Camera2D cam = mapCamera();
+        BeginScissorMode(LEFT_UI_RESERVE, TITLE_TOP_MARGIN, playW, playH);
+        BeginMode2D(cam);
 
-    // Damage indicators + explosions (above grid, below UI panels)
-    damageIndicators.update(GetFrameTime());
-    damageIndicators.render();
-    explosions.update(GetFrameTime());
-    explosions.render();
+        gridView->render(frameLayout_, world, &hoverPos, selectedPos, reachable, attackable, lethal, path);
 
-    // Error overlay
-    errorView->render(frameLayout_.errX, frameLayout_.errY);
+        damageIndicators.update(GetFrameTime());
+        damageIndicators.render();
+        explosions.update(GetFrameTime());
+        explosions.render();
+
+        errorView->render(frameLayout_.errX, frameLayout_.errY);
+
+        EndMode2D();
+        EndScissorMode();
+    }
 
     // Mode icon row (left panel)
     static const ControllerMode MODES[] = {
@@ -270,8 +282,36 @@ void GUI::pollMapPan() {
         int dy = my - mapDragLastY_;
         mapDragLastX_ = mx;
         mapDragLastY_ = my;
-        scrollGrid(-dx, -dy);
+        // Keep drag 1:1 with on-screen map at any zoom (camera scale).
+        scrollGrid((int)std::lround(-dx / mapZoom_), (int)std::lround(-dy / mapZoom_));
     }
+}
+
+void GUI::pollMapZoom() {
+    updateLayout();
+    float w = GetMouseWheelMove();
+    if (w == 0.f)
+        return;
+    int mx = GetMouseX(), my = GetMouseY();
+    if (isOverChrome(mx, my))
+        return;
+    mapZoom_ *= (1.f + w * 0.12f);
+    mapZoom_ = std::clamp(mapZoom_, 0.4f, 2.5f);
+}
+
+Camera2D GUI::mapCamera() const {
+    const float playLeft   = (float)LEFT_UI_RESERVE;
+    const float playRight  = (float)frameLayout_.infoPanelX;
+    const float playTop    = (float)TITLE_TOP_MARGIN;
+    const float playBottom = (float)(frameLayout_.screenH - BOTTOM_MARGIN);
+    const float pcx = (playLeft + playRight) * 0.5f;
+    const float pcy = (playTop + playBottom) * 0.5f;
+    Camera2D cam{};
+    cam.offset   = { pcx, pcy };
+    cam.target   = { pcx, pcy };
+    cam.zoom     = mapZoom_;
+    cam.rotation = 0.f;
+    return cam;
 }
 
 std::optional<ClickTarget> GUI::pollClick(const std::vector<std::string>& actionLabels) {
@@ -315,9 +355,10 @@ std::optional<Position> GUI::pollHover() {
 //   => col + row = (screen_y - GRID_ORIG_Y) / ISO_HALF_H  = ay
 //   => col = floor((ax + ay) / 2),  row = floor((ay - ax) / 2)
 std::optional<Position> GUI::pixelToTile(int mx, int my) const {
+    Vector2 world = GetScreenToWorld2D(Vector2{(float)mx, (float)my}, mapCamera());
     auto [scrollX, scrollY] = gridView->getScrollOffset();
-    float ax = (float)(mx - frameLayout_.gridOrigX + scrollX) / (float)ISO_HALF_W;
-    float ay = (float)(my - frameLayout_.gridOrigY + scrollY) / (float)ISO_HALF_H;
+    float ax = (float)(world.x - frameLayout_.gridOrigX + scrollX) / (float)ISO_HALF_W;
+    float ay = (float)(world.y - frameLayout_.gridOrigY + scrollY) / (float)ISO_HALF_H;
     int col = (int)std::floor((ax + ay) / 2.0f);
     int row = (int)std::floor((ay - ax) / 2.0f);
     if (row < 0 || row >= Game::HEIGHT || col < 0 || col >= Game::WIDTH)

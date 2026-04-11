@@ -53,6 +53,9 @@ public:
      */
     void pollMapPan();
 
+    /** Trackpad / mouse wheel zoom over the map (ignored over chrome). */
+    void pollMapZoom();
+
     /** Returns true if the END TURN button was clicked this frame. */
     bool pollEndTurn();
 
@@ -83,6 +86,10 @@ private:
     std::pair<int,int>      tileToPixel(const Position& pos) const;
 
     bool isOverChrome(int mx, int my) const;
+
+    Camera2D mapCamera() const;
+
+    float mapZoom_ = 1.0f;
 
     enum class MapDragPhase { None, Armed, Panning };
     MapDragPhase mapDragPhase_      = MapDragPhase::None;

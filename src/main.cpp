@@ -45,6 +45,7 @@ int main() {
 
         // --- Click-drag map pan (must run before hover / click) ---
         view.pollMapPan();
+        view.pollMapZoom();
 
         // --- Mouse hover (syncs keyHover so WASD continues from mouse cursor) ---
         if (auto pos = view.pollHover()) {
