@@ -306,15 +306,14 @@ InformationView::InformationView() {}
 
 void InformationView::render(const World& world,
                              const Position* hoverPos,
-                             const Position* selectedPos) const {
-    const int PX  = GRID_RIGHT + 4;
-    const int PW  = 1916 - PX;
+                             const Position* selectedPos,
+                             int panelX, int panelW, int screenH) const {
     const int PAD = 14;
-    const int cx  = PX + PAD;
-    const int cw  = PW - PAD * 2;
+    const int cx  = panelX + PAD;
+    const int cw  = panelW - PAD * 2;
 
-    DrawRectangle(PX, 0, PW, 1080, Color{20, 20, 32, 255});
-    DrawLine(PX, 0, PX, 1080, Color{55, 55, 75, 255});
+    DrawRectangle(panelX, 0, panelW, screenH, Color{20, 20, 32, 255});
+    DrawLine(panelX, 0, panelX, screenH, Color{55, 55, 75, 255});
 
     int y = 70;
     DrawText("TILE INFO", cx, y, 14, Color{140, 140, 165, 255});
