@@ -5,7 +5,7 @@
 #include <utility>
 
 // ---------------------------------------------------------------------------
-// Layout constants — fake-isometric 12×12 grid (tile geometry is fixed).
+// Layout constants — fake-isometric grid (tile geometry is fixed; size from Game::WIDTH/HEIGHT).
 //
 // Tile (row, col) top vertex in screen space:
 //   px = gridOrigX + (col - row) * ISO_HALF_W - scrollX
@@ -15,17 +15,17 @@
 // so the game fits different window sizes and aspect ratios.
 // ---------------------------------------------------------------------------
 namespace Layout {
-    inline constexpr int ISO_TILE_W  = 96;
-    inline constexpr int ISO_TILE_H  = 48;
-    inline constexpr int ISO_HALF_W  = ISO_TILE_W / 2;   // 48
-    inline constexpr int ISO_HALF_H  = ISO_TILE_H / 2;   // 24
+    inline constexpr int ISO_TILE_W  = 120;
+    inline constexpr int ISO_TILE_H  = 60;
+    inline constexpr int ISO_HALF_W  = ISO_TILE_W / 2;   // 60
+    inline constexpr int ISO_HALF_H  = ISO_TILE_H / 2;   // 30
 
     inline constexpr int BTN_W      = 140;
     inline constexpr int BTN_H      = 40;
     inline constexpr int BTN_GAP    = 8;
     inline constexpr int ICON_SIZE  = 44;
 
-    /** Horizontal half-span from grid origin to farthest diamond edge (12×12). */
+    /** Horizontal half-span from grid origin to farthest diamond edge. */
     inline constexpr int gridHalfSpanX() {
         return (Game::HEIGHT - 1) * ISO_HALF_W + ISO_HALF_W;
     }
@@ -86,8 +86,8 @@ namespace Layout {
         L.actX     = 30;
         L.modeBtnY = L.gridOrigY;
         L.actBtnY  = L.modeBtnY + ICON_SIZE + BTN_GAP + 14;
-        L.errX     = L.gridOrigX - 107;
-        L.errY     = L.gridOrigY - 30;
+        L.errX     = L.gridOrigX - (ISO_HALF_W + 59);
+        L.errY     = L.gridOrigY - (ISO_HALF_H + 6);
         return L;
     }
 
