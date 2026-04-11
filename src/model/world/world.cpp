@@ -411,6 +411,13 @@ World WorldFactory::create(WorldLayout layout, std::vector<Player> players) {
             set(9,  9, Terrain::FOREST); set(9, 10, Terrain::FOREST);
             set(10, 9, Terrain::FOREST);
 
+            // Extra 14×14 fringe — north/east/south/west bands
+            set(0, 11, Terrain::FOREST); set(1, 12, Terrain::FOREST); set(2, 13, Terrain::FOREST);
+            set(11, 13, Terrain::FOREST); set(12, 12, Terrain::FOREST); set(13, 11, Terrain::FOREST);
+            set(13, 3, Terrain::MOUNTAIN); set(12, 0, Terrain::MOUNTAIN); set(11, 1, Terrain::MOUNTAIN);
+            set(0, 4, Terrain::RIVER); set(1, 1, Terrain::RIVER);
+            set(10, 11, Terrain::RIVER); set(11, 10, Terrain::RIVER); set(12, 9, Terrain::RIVER);
+
             // --- Units ---
             // Blue team
             world.addUnit(Position(4, 3),  UnitFactory::create(UnitType::WARRIOR, players[0]));
@@ -421,8 +428,8 @@ World WorldFactory::create(WorldLayout layout, std::vector<Player> players) {
             world.addUnit(Position(9, 6),  UnitFactory::create(UnitType::CAVALRY, players[1]));
 
             // --- Cities ---
-            world.addCity(Position(1, 9),  City("Ironhaven", 4), 0);  // Player 1
-            world.addCity(Position(10, 2), City("Stonekeep", 4), 1);  // Player 2
+            world.addCity(Position(1, 11),  City("Ironhaven", 4), 0);  // Player 1
+            world.addCity(Position(12, 2), City("Stonekeep", 4), 1);  // Player 2
             break;
         }
         case WorldLayout::EMPTY:
