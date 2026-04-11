@@ -1,12 +1,11 @@
 #include "view/info_view.h"
 #include "view/layout.h"
+#include <algorithm>
 #include "model/tile.h"
 #include "model/unit.h"
 #include "model/city.h"
 #include "model/world.h"
 #include "raylib.h"
-
-using namespace Layout;
 
 // ---------------------------------------------------------------------------
 // String helpers

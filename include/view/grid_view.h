@@ -19,7 +19,8 @@ public:
     ~GridView();
 
     /** Render the full grid for one frame. */
-    void render(const World& world, const Position* hoverPos, const Position* selectedPos,
+    void render(const Layout::ViewLayout& layout,
+                const World& world, const Position* hoverPos, const Position* selectedPos,
                 const std::vector<Position>& reachable  = {},
                 const std::vector<Position>& attackable = {},
                 const std::vector<Position>& lethal     = {},
@@ -27,6 +28,9 @@ public:
 
     /** Pan the camera by (dpx, dpy) pixels, clamped to map bounds. */
     void scrollBy(int dpx, int dpy);
+
+    /** Clamp scroll so the map stays over the play area (call after resize / each frame). */
+    void applyScrollBounds(int scrollMinX, int scrollMaxX, int scrollMinY, int scrollMaxY);
 
     /** Reset camera to top-left. */
     void resetScroll();
@@ -44,6 +48,14 @@ public:
 private:
     int scrollOffsetX = 0;
     int scrollOffsetY = 0;
+    int gridOrigX_    = 960;
+    int gridOrigY_    = 220;
+    int scrollMinX_   = 0;
+    int scrollMaxX_   = 0;
+    int scrollMinY_   = 0;
+    int scrollMaxY_   = 0;
+
+    void isoTopVertex(int row, int col, int& px, int& py) const;
 
     std::optional<Texture2D> terrainSprites[5];  // indexed by (int)Terrain
     std::optional<Texture2D> unitSprites[5];     // indexed by (int)UnitType

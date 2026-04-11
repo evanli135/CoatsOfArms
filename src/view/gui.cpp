@@ -5,8 +5,10 @@
 #include "view/layout.h"
 #include "model/util.h"
 #include "raylib.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <unordered_set>
 
 using namespace Layout;
@@ -15,22 +17,45 @@ using namespace Layout;
 // GUI
 // ---------------------------------------------------------------------------
 
+void GUI::updateLayout() {
+    screenWidth  = GetScreenWidth();
+    screenHeight = GetScreenHeight();
+    frameLayout_ = makeViewLayout(screenWidth, screenHeight);
+
+    int sminX, smaxX, sminY, smaxY;
+    gridScrollBounds(frameLayout_,
+                     LEFT_UI_RESERVE, frameLayout_.infoPanelX,
+                     TITLE_TOP_MARGIN, frameLayout_.screenH - BOTTOM_MARGIN,
+                     sminX, smaxX, sminY, smaxY);
+    gridView->applyScrollBounds(sminX, smaxX, sminY, smaxY);
+
+    modeButtonSlots.clear();
+    for (int i = 0; i < 3; ++i)
+        modeButtonSlots.push_back(Rect{
+            frameLayout_.actX + i * (ICON_SIZE + BTN_GAP),
+            frameLayout_.modeBtnY, ICON_SIZE, ICON_SIZE});
+
+    actionButtonSlots.clear();
+    for (int i = 0; i < 8; ++i)
+        actionButtonSlots.push_back(Rect{
+            frameLayout_.actX,
+            frameLayout_.actBtnY + i * (BTN_H + BTN_GAP),
+            BTN_W, BTN_H});
+
+    endTurnButton = Rect{
+        frameLayout_.actX,
+        frameLayout_.actBtnY + 8 * (BTN_H + BTN_GAP) + 16,
+        BTN_W + 24, BTN_H + 8};
+}
+
 GUI::GUI(int width, int height)
     : screenWidth(width), screenHeight(height)
 {
-    for (int i = 0; i < 3; ++i)
-        modeButtonSlots.push_back(Rect{ACT_X + i*(ICON_SIZE+BTN_GAP), MODE_BTN_Y, ICON_SIZE, ICON_SIZE});
-
-    for (int i = 0; i < 8; ++i)
-        actionButtonSlots.push_back(Rect{ACT_X, ACT_BTN_Y + i*(BTN_H+BTN_GAP), BTN_W, BTN_H});
-
-    // END TURN sits below the 8 action button slots with a small gap
-    endTurnButton = Rect{ACT_X, ACT_BTN_Y + 8*(BTN_H+BTN_GAP) + 16, BTN_W + 24, BTN_H + 8};
-
     errorView       = new ErrorView();
     informationView = new InformationView();
     actionView      = new ActionView();
     gridView        = new GridView();
+    updateLayout();
 }
 
 GUI::~GUI() {
@@ -47,6 +72,8 @@ void GUI::render(const World& world,
                  ControllerMode currentMode,
                  int pendingActionIndex)
 {
+    updateLayout();
+
     ClearBackground(Color{16, 16, 26, 255});
 
     // Title bar
@@ -85,17 +112,28 @@ void GUI::render(const World& world,
         }
     }
 
-    // Grid
-    gridView->render(world, &hoverPos, selectedPos, reachable, attackable, lethal, path);
+    // Map viewport: clip + zoom (trackpad / wheel). UI stays unscaled.
+    {
+        int playW = frameLayout_.infoPanelX - LEFT_UI_RESERVE;
+        int playH = (frameLayout_.screenH - BOTTOM_MARGIN) - TITLE_TOP_MARGIN;
+        playW = std::max(1, playW);
+        playH = std::max(1, playH);
+        Camera2D cam = mapCamera();
+        BeginScissorMode(LEFT_UI_RESERVE, TITLE_TOP_MARGIN, playW, playH);
+        BeginMode2D(cam);
 
-    // Damage indicators + explosions (above grid, below UI panels)
-    damageIndicators.update(GetFrameTime());
-    damageIndicators.render();
-    explosions.update(GetFrameTime());
-    explosions.render();
+        gridView->render(frameLayout_, world, &hoverPos, selectedPos, reachable, attackable, lethal, path);
 
-    // Error overlay
-    errorView->render(ERR_X, ERR_Y);
+        damageIndicators.update(GetFrameTime());
+        damageIndicators.render();
+        explosions.update(GetFrameTime());
+        explosions.render();
+
+        errorView->render(frameLayout_.errX, frameLayout_.errY);
+
+        EndMode2D();
+        EndScissorMode();
+    }
 
     // Mode icon row (left panel)
     static const ControllerMode MODES[] = {
@@ -107,11 +145,12 @@ void GUI::render(const World& world,
     }
 
     // Action buttons (left panel)
-    DrawText("ACTIONS", ACT_X, ACT_BTN_Y-20, 14, Color{160, 160, 180, 255});
+    DrawText("ACTIONS", frameLayout_.actX, frameLayout_.actBtnY - 20, 14, Color{160, 160, 180, 255});
     actionView->render(actionLabels, actionButtonSlots, pendingActionIndex, enabledActions);
 
     // Info panel (right panel)
-    informationView->render(world, &hoverPos, selectedPos);
+    informationView->render(world, &hoverPos, selectedPos,
+                              frameLayout_.infoPanelX, frameLayout_.infoPanelW, frameLayout_.screenH);
 
     // END TURN button
     bool allDone = world.allUnitsExhausted();
@@ -228,16 +267,108 @@ void GUI::render(const World& world,
     DrawFPS(10, 10);
 }
 
-bool GUI::pollEndTurn() const {
+bool GUI::pollEndTurn() {
+    updateLayout();
     if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) return false;
     return endTurnButton.contains(GetMouseX(), GetMouseY());
 }
 
-std::optional<ClickTarget> GUI::pollClick(const std::vector<std::string>& actionLabels) const {
-    if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) return std::nullopt;
+bool GUI::isOverChrome(int mx, int my) const {
+    if (my < TITLE_TOP_MARGIN)
+        return true;
+    if (mx >= frameLayout_.infoPanelX)
+        return true;
+    for (const Rect& r : modeButtonSlots)
+        if (r.contains(mx, my)) return true;
+    for (const Rect& r : actionButtonSlots)
+        if (r.contains(mx, my)) return true;
+    if (endTurnButton.contains(mx, my))
+        return true;
+    return false;
+}
+
+void GUI::pollMapPan() {
+    updateLayout();
+    int mx = GetMouseX(), my = GetMouseY();
+    constexpr int kPanThresholdPx = 6;
+
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        if (isOverChrome(mx, my))
+            mapDragPhase_ = MapDragPhase::None;
+        else {
+            mapDragPhase_      = MapDragPhase::Armed;
+            mapDragStartX_     = mx;
+            mapDragStartY_     = my;
+            mapDragLastX_      = mx;
+            mapDragLastY_      = my;
+            mapDragStartedOnGrid_ = pixelToTile(mx, my).has_value();
+        }
+    }
+
+    if (mapDragPhase_ == MapDragPhase::Armed && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+        int manh = std::abs(mx - mapDragStartX_) + std::abs(my - mapDragStartY_);
+        if (manh >= kPanThresholdPx) {
+            mapDragPhase_ = MapDragPhase::Panning;
+            mapDragLastX_ = mx;
+            mapDragLastY_ = my;
+        }
+    }
+
+    if (mapDragPhase_ == MapDragPhase::Panning && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+        int dx = mx - mapDragLastX_;
+        int dy = my - mapDragLastY_;
+        mapDragLastX_ = mx;
+        mapDragLastY_ = my;
+        // Keep drag 1:1 with on-screen map at any zoom (camera scale).
+        scrollGrid((int)std::lround(-dx / mapZoom_), (int)std::lround(-dy / mapZoom_));
+    }
+}
+
+void GUI::pollMapZoom() {
+    updateLayout();
+    float w = GetMouseWheelMove();
+    if (w == 0.f)
+        return;
+    int mx = GetMouseX(), my = GetMouseY();
+    if (isOverChrome(mx, my))
+        return;
+    mapZoom_ *= (1.f + w * 0.12f);
+    mapZoom_ = std::clamp(mapZoom_, 0.4f, 2.5f);
+}
+
+Camera2D GUI::mapCamera() const {
+    const float playLeft   = (float)LEFT_UI_RESERVE;
+    const float playRight  = (float)frameLayout_.infoPanelX;
+    const float playTop    = (float)TITLE_TOP_MARGIN;
+    const float playBottom = (float)(frameLayout_.screenH - BOTTOM_MARGIN);
+    const float pcx = (playLeft + playRight) * 0.5f;
+    const float pcy = (playTop + playBottom) * 0.5f;
+    Camera2D cam{};
+    cam.offset   = { pcx, pcy };
+    cam.target   = { pcx, pcy };
+    cam.zoom     = mapZoom_;
+    cam.rotation = 0.f;
+    return cam;
+}
+
+std::optional<ClickTarget> GUI::pollClick(const std::vector<std::string>& actionLabels) {
+    updateLayout();
     int mx = GetMouseX(), my = GetMouseY();
 
-    if (auto pos = pixelToTile(mx, my)) return ClickTarget{*pos};
+    // Tile clicks are deferred to release so drag-pan does not select/move.
+    if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+        std::optional<ClickTarget> tileClick;
+        if (mapDragPhase_ == MapDragPhase::Armed && mapDragStartedOnGrid_) {
+            if (auto pos = pixelToTile(mx, my))
+                tileClick = ClickTarget{*pos};
+        }
+        mapDragPhase_ = MapDragPhase::None;
+        if (tileClick)
+            return tileClick;
+    }
+
+    if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+        return std::nullopt;
 
     for (int i = 0; i < (int)actionLabels.size() && i < (int)actionButtonSlots.size(); ++i)
         if (actionButtonSlots[i].contains(mx, my)) return ClickTarget{i};
@@ -245,10 +376,12 @@ std::optional<ClickTarget> GUI::pollClick(const std::vector<std::string>& action
     for (int i = 0; i < (int)modeButtonSlots.size(); ++i)
         if (modeButtonSlots[i].contains(mx, my)) return ClickTarget{static_cast<ControllerMode>(i)};
 
+    // Map / empty area: pollMapPan() arms drag; actual tile click on release above.
     return std::nullopt;
 }
 
-std::optional<Position> GUI::pollHover() const {
+std::optional<Position> GUI::pollHover() {
+    updateLayout();
     return pixelToTile(GetMouseX(), GetMouseY());
 }
 
@@ -259,9 +392,10 @@ std::optional<Position> GUI::pollHover() const {
 //   => col + row = (screen_y - GRID_ORIG_Y) / ISO_HALF_H  = ay
 //   => col = floor((ax + ay) / 2),  row = floor((ay - ax) / 2)
 std::optional<Position> GUI::pixelToTile(int mx, int my) const {
+    Vector2 world = GetScreenToWorld2D(Vector2{(float)mx, (float)my}, mapCamera());
     auto [scrollX, scrollY] = gridView->getScrollOffset();
-    float ax = (float)(mx - GRID_ORIG_X + scrollX) / (float)ISO_HALF_W;
-    float ay = (float)(my - GRID_ORIG_Y + scrollY) / (float)ISO_HALF_H;
+    float ax = (float)(world.x - frameLayout_.gridOrigX + scrollX) / (float)ISO_HALF_W;
+    float ay = (float)(world.y - frameLayout_.gridOrigY + scrollY) / (float)ISO_HALF_H;
     int col = (int)std::floor((ax + ay) / 2.0f);
     int row = (int)std::floor((ay - ax) / 2.0f);
     if (row < 0 || row >= Game::HEIGHT || col < 0 || col >= Game::WIDTH)
@@ -275,8 +409,8 @@ void GUI::scrollGrid(int dpx, int dpy){ gridView->scrollBy(dpx, dpy); }
 
 std::pair<int,int> GUI::tileToPixel(const Position& pos) const {
     auto [scrollX, scrollY] = gridView->getScrollOffset();
-    int px = GRID_ORIG_X + (pos.col() - pos.row()) * ISO_HALF_W - scrollX;
-    int py = GRID_ORIG_Y + (pos.col() + pos.row()) * ISO_HALF_H - scrollY;
+    int px = frameLayout_.gridOrigX + (pos.col() - pos.row()) * ISO_HALF_W - scrollX;
+    int py = frameLayout_.gridOrigY + (pos.col() + pos.row()) * ISO_HALF_H - scrollY;
     return {px, py};
 }
 
