@@ -1,6 +1,7 @@
 #include "view/info_view.h"
 #include "view/layout.h"
 #include <algorithm>
+#include <cmath>
 #include "model/tile.h"
 #include "model/unit.h"
 #include "model/city.h"
@@ -56,7 +57,7 @@ static const char* unitName(UnitType type) {
 }
 
 // ---------------------------------------------------------------------------
-// Drawing primitives
+// Drawing primitives — shared
 // ---------------------------------------------------------------------------
 
 static void drawDivider(int cx, int cw, int& y) {
@@ -66,7 +67,6 @@ static void drawDivider(int cx, int cw, int& y) {
 
 struct StatBox { const char* label; int val; Color lc; Color vc; };
 
-// Primary stat row — tall boxes (50px), 13/18pt text
 static void drawWideStatRow(int cx, int cw, int& y, const StatBox* stats, int n) {
     const int boxW = cw / n;
     for (int i = 0; i < n; ++i) {
@@ -79,7 +79,6 @@ static void drawWideStatRow(int cx, int cw, int& y, const StatBox* stats, int n)
     y += 58;
 }
 
-// Bonus stat row — compact boxes (44px), 11/16pt text
 static void drawCompactStatRow(int cx, int cw, int& y, const StatBox* stats, int n) {
     const int boxW = cw / n;
     for (int i = 0; i < n; ++i) {
@@ -92,38 +91,97 @@ static void drawCompactStatRow(int cx, int cw, int& y, const StatBox* stats, int
     y += 52;
 }
 
-static void drawHitBadge(int cx, int cw, int y, int hitPct) {
-    const char* hitStr = TextFormat("%d%%", hitPct);
+// ---------------------------------------------------------------------------
+// Combat forecast primitives
+// ---------------------------------------------------------------------------
+
+// Two name cards with an arrow — shows who attacks whom.
+static void drawCombatMatchup(int cx, int cw, int& y,
+                               const char* atkName, Color atkCol,
+                               const char* defName, Color defCol) {
+    const int arrowZone = 28;
+    const int cardW     = (cw - arrowZone) / 2;
+    const int cardH     = 34;
+
+    // Attacker card (left) — dimmed fill, colored border
+    Color atkDim = {(unsigned char)(atkCol.r / 5), (unsigned char)(atkCol.g / 5),
+                    (unsigned char)(atkCol.b / 5), 255};
+    DrawRectangle(cx, y, cardW, cardH, atkDim);
+    DrawRectangleLines(cx, y, cardW, cardH, atkCol);
+    // Top accent bar
+    DrawRectangle(cx, y, cardW, 3, atkCol);
+    DrawText(atkName, cx + 8, y + 10, 15, atkCol);
+
+    // Arrow
+    const char* arrow = "-->";
+    int aw = MeasureText(arrow, 12);
+    DrawText(arrow, cx + cardW + (arrowZone - aw) / 2, y + (cardH - 12) / 2,
+             12, Color{170, 170, 195, 180});
+
+    // Defender card (right)
+    Color defDim = {(unsigned char)(defCol.r / 5), (unsigned char)(defCol.g / 5),
+                    (unsigned char)(defCol.b / 5), 255};
+    const int rx = cx + cardW + arrowZone;
+    DrawRectangle(rx, y, cardW, cardH, defDim);
+    DrawRectangleLines(rx, y, cardW, cardH, defCol);
+    DrawRectangle(rx, y, cardW, 3, defCol);
+    DrawText(defName, rx + 8, y + 10, 15, defCol);
+
+    y += cardH + 10;
+}
+
+// Hit-chance row: label on left, big coloured % on right — no bar.
+static void drawHitChanceRow(int cx, int cw, int& y, int hitPct) {
     const Color hitCol = hitPct >= 85 ? Color{ 90, 210,  90, 255}
                        : hitPct >= 65 ? Color{215, 195,  60, 255}
                        :                Color{210,  80,  80, 255};
-    const int hw = MeasureText(hitStr, 12);
-    DrawRectangle(cx + cw - hw - 16, y - 1, hw + 16, 18, Color{25, 30, 40, 210});
-    DrawRectangleLines(cx + cw - hw - 16, y - 1, hw + 16, 18, hitCol);
-    DrawText("HIT ", cx + cw - hw - 12, y + 2, 11, Color{140, 140, 160, 255});
-    DrawText(hitStr,  cx + cw - hw -  2, y + 2, 12, hitCol);
+
+    DrawText("HIT CHANCE", cx, y + 5, 11, Color{130, 130, 155, 255});
+    const char* pctStr = TextFormat("%d%%", hitPct);
+    DrawText(pctStr, cx + cw - MeasureText(pctStr, 22), y, 22, hitCol);
+    y += 30;
 }
 
-static void drawForecastRow(int cx, int cw, int& y,
-                            const char* label, Color labelCol,
-                            int dmg, int hpBefore, int hpAfter, bool dies) {
-    DrawText(label, cx, y, 14, labelCol);
-    const char* dmgStr = TextFormat("-%d HP", dmg);
-    const int   dmgW   = MeasureText(dmgStr, 13);
-    DrawRectangle(cx + cw - dmgW - 14, y - 1, dmgW + 14, 20, Color{130, 35, 35, 200});
-    DrawRectangleLines(cx + cw - dmgW - 14, y - 1, dmgW + 14, 20, Color{210, 75, 75, 255});
-    DrawText(dmgStr, cx + cw - dmgW - 7, y + 2, 13, Color{255, 150, 150, 255});
-    y += 22;
+// HP bar: green=surviving, flashing red=damage zone, numeric label below.
+// flash: 0.0–1.0 pulse value driven by GetTime() in the caller.
+static void drawHpDamageBar(int cx, int cw, int& y,
+                             int hpBefore, int hpAfter, int maxHp, bool dies,
+                             float flash) {
+    const float afterFrac  = std::max(0.0f, (float)hpAfter  / (float)maxHp);
+    const float beforeFrac = std::min(1.0f, (float)hpBefore / (float)maxHp);
 
-    const Color hpCol = dies            ? Color{220,  60,  60, 255}
-                      : hpAfter >= hpBefore / 2 ? Color{180, 215, 180, 255}
-                      :                           Color{230, 155,  60, 255};
-    DrawText(TextFormat("HP  %d -> %d", hpBefore, hpAfter), cx + 8, y, 13, hpCol);
-    if (dies) {
-        const char* tag = "DESTROYED";
-        DrawText(tag, cx + cw - MeasureText(tag, 12) - 2, y + 1, 12, Color{220, 80, 80, 255});
+    // Background track
+    DrawRectangle(cx, y, cw, 12, Color{25, 25, 38, 255});
+
+    // Surviving HP — green
+    if (hpAfter > 0)
+        DrawRectangle(cx, y, (int)(cw * afterFrac), 12, Color{55, 175, 75, 255});
+
+    // Damage zone — flashing red
+    const int dmgBarX = (int)(cw * afterFrac);
+    const int dmgBarW = (int)(cw * (beforeFrac - afterFrac));
+    if (dmgBarW > 0) {
+        const unsigned char alpha = (unsigned char)(90 + (int)(flash * 165.0f));
+        DrawRectangle(cx + dmgBarX, y, dmgBarW, 12, Color{230, 55, 55, alpha});
+        // Bright inner highlight at peak flash
+        if (flash > 0.6f) {
+            const unsigned char hi = (unsigned char)((flash - 0.6f) / 0.4f * 120.0f);
+            DrawRectangle(cx + dmgBarX, y + 2, dmgBarW, 4, Color{255, 130, 130, hi});
+        }
     }
-    y += 20;
+
+    DrawRectangleLines(cx, y, cw, 12, Color{55, 55, 75, 200});
+    y += 15;
+
+    // Numeric label
+    DrawText(TextFormat("%d / %d", hpBefore, maxHp), cx, y, 12, Color{130, 130, 155, 255});
+    if (dies) {
+        DrawText("FATAL", cx + cw - MeasureText("FATAL", 12), y, 12, Color{220, 60, 60, 255});
+    } else {
+        const char* outcomeStr = TextFormat("-> %d  (-%d)", hpAfter, hpBefore - hpAfter);
+        DrawText(outcomeStr, cx + cw - MeasureText(outcomeStr, 12), y, 12, Color{200, 100, 100, 255});
+    }
+    y += 18;
 }
 
 // ---------------------------------------------------------------------------
@@ -139,7 +197,7 @@ static void renderTerrainSection(int cx, int cw, int& y, Terrain ter) {
     y += 28;
 }
 
-static void renderUnitSection(int cx, int cw, int& y, const Unit* u) {
+static void renderUnitSection(int cx, int cw, int& y, const Unit* u, bool isActor) {
     drawDivider(cx, cw, y);
 
     const Color pc    = playerColor(u->getOwner().getId());
@@ -147,7 +205,8 @@ static void renderUnitSection(int cx, int cw, int& y, const Unit* u) {
                          (unsigned char)(pc.g / 2),
                          (unsigned char)(pc.b / 2), 255};
 
-    DrawText("UNIT", cx, y, 12, Color{130, 130, 155, 255});
+    // Label: "ACTOR" when this is the selected/attacking unit, "UNIT" otherwise
+    DrawText(isActor ? "ACTOR" : "UNIT", cx, y, 12, Color{130, 130, 155, 255});
     DrawRectangle(cx + cw - 66, y, 66, 20, dimPc);
     DrawText(TextFormat("Player %d", u->getOwner().getId() + 1),
              cx + cw - 60, y + 4, 12, pc);
@@ -156,10 +215,10 @@ static void renderUnitSection(int cx, int cw, int& y, const Unit* u) {
     y += 32;
 
     const float hpFrac = (float)u->getHealth() / (float)u->getMaxHealth();
-    const Color hpCol  = hpFrac >= 0.5f ? Color{200, 220, 200, 255} : Color{220, 60, 60, 255};
     DrawText("HP", cx, y, 13, Color{150, 150, 170, 255});
-    DrawText(TextFormat("%d / %d", u->getHealth(), u->getMaxHealth()), cx + 30, y, 15, hpCol);
-    y += 30;
+    DrawText(TextFormat("%d / %d", u->getHealth(), u->getMaxHealth()), cx + 30, y, 15,
+             hpFrac >= 0.5f ? Color{200, 220, 200, 255} : Color{220, 60, 60, 255});
+    y += 26;
 
     const StatBox coreStats[2] = {
         {"MOV", u->getMovement(), {120, 160, 220, 255}, {160, 200, 255, 255}},
@@ -245,7 +304,7 @@ static void renderCitySection(int cx, int cw, int& y,
             trainLabel = TextFormat("Unit cap (%d/%d)", owned, TrainingSystem::MAX_UNITS_PER_PLAYER);
             trainCol   = Color{180, 80, 80, 255};
         } else if (tileOcc) {
-            trainLabel = "Tile occupied \xe2\x80\x94 move unit first";
+            trainLabel = "Tile occupied -- move unit first";
             trainCol   = Color{150, 130, 60, 255};
         } else {
             trainLabel = TextFormat("Ready  (%d/%d slots)", owned, TrainingSystem::MAX_UNITS_PER_PLAYER);
@@ -256,45 +315,113 @@ static void renderCitySection(int cx, int cw, int& y,
     }
 }
 
+static void renderChargeForecast(int cx, int cw, int& y,
+                                  const Unit* cav, const Unit* enemy) {
+    DrawLine(cx, y, cx + cw, y, Color{55, 55, 75, 200});
+    y += 14;
+
+    DrawText("CHARGE FORECAST", cx, y, 13, Color{255, 160, 60, 255});
+    y += 24;
+
+    const Color cavCol   = playerColor(cav->getOwner().getId());
+    const Color enemyCol = playerColor(enemy->getOwner().getId());
+    drawCombatMatchup(cx, cw, y, unitName(cav->getType()), cavCol,
+                      unitName(enemy->getType()), enemyCol);
+
+    DrawText("CHARGE", cx, y, 16, Color{255, 160, 60, 255});
+    const char* gLabel = "(guaranteed hit)";
+    DrawText(gLabel, cx + cw - MeasureText(gLabel, 11), y + 4, 11,
+             Color{130, 130, 155, 255});
+    y += 24;
+
+    int dmg    = cav->computeChargeDamageAgainst(*enemy);
+    int hpLeft = std::max(0, enemy->getHealth() - dmg);
+    bool fatal = (hpLeft == 0);
+
+    const float flash = (sinf((float)GetTime() * 6.0f) + 1.0f) * 0.5f;
+
+    DrawText(unitName(enemy->getType()), cx, y, 14, enemyCol);
+    DrawText("loses HP", cx + cw - MeasureText("loses HP", 11), y + 2, 11,
+             Color{175, 100, 100, 255});
+    y += 18;
+    drawHpDamageBar(cx, cw, y,
+                    enemy->getHealth(), hpLeft, enemy->getMaxHealth(), fatal, flash);
+
+    y += 8;
+    DrawText("No retaliation vs. charges.", cx, y, 12, Color{100, 175, 100, 255});
+    y += 20;
+}
+
 static void renderCombatForecast(int cx, int cw, int& y,
                                  const World& world,
-                                 const Unit* sel, const Unit* def,
-                                 const Position& selPos, const Position& hoverPos) {
-    const World::CombatForecast fc = world.getCombatForecast(selPos, hoverPos);
+                                 const Unit* atk, const Unit* def,
+                                 const Position& atkPos, const Position& defPos) {
+    const World::CombatForecast fc = world.getCombatForecast(atkPos, defPos);
 
     DrawLine(cx, y, cx + cw, y, Color{55, 55, 75, 200});
     y += 14;
 
+    // Section header
     const Color hdCol = fc.inRange && fc.attackerCanAct
                       ? Color{230, 180,  60, 255}
                       : Color{120, 120, 145, 255};
     DrawText("COMBAT FORECAST", cx, y, 13, hdCol);
-    y += 22;
+    y += 24;
 
     if (!fc.attackerCanAct) {
-        DrawText("Attacker has already acted", cx, y, 13, Color{130, 100, 100, 255});
+        DrawText("Attacker has already acted.", cx, y, 13, Color{130, 100, 100, 255});
         return;
     }
     if (!fc.inRange) {
-        DrawText("Out of attack range", cx, y, 13, Color{130, 100, 100, 255});
+        DrawText("Target out of attack range.", cx, y, 13, Color{130, 100, 100, 255});
         return;
     }
 
-    DrawText("ATTACK", cx, y, 11, Color{130, 130, 155, 255});
-    drawHitBadge(cx, cw, y, fc.attackHitChance);
-    y += 16;
-    drawForecastRow(cx, cw, y, unitName(sel->getType()), playerColor(sel->getOwner().getId()),
-                    fc.damage, fc.defenderHpBefore, fc.defenderHpAfter, fc.lethal);
+    // Shared flash pulse — 0.0 to 1.0, ~3 Hz
+    const float flash = (sinf((float)GetTime() * 6.0f) + 1.0f) * 0.5f;
 
-    if (!fc.lethal && fc.retaliation > 0) {
+    const Color atkCol = playerColor(atk->getOwner().getId());
+    const Color defCol = playerColor(def->getOwner().getId());
+
+    // Matchup header: [Attacker] --> [Defender]
+    drawCombatMatchup(cx, cw, y,
+                      unitName(atk->getType()), atkCol,
+                      unitName(def->getType()), defCol);
+
+    // ── ATTACK ───────────────────────────────────────────────────────────────
+    DrawText("ATTACK", cx, y, 16, Color{230, 160, 60, 255});
+    y += 22;
+    drawHitChanceRow(cx, cw, y, fc.attackHitChance);
+
+    // Label the unit whose HP is shown
+    DrawText(unitName(def->getType()), cx, y, 14, defCol);
+    DrawText("loses HP", cx + cw - MeasureText("loses HP", 11), y + 2, 11,
+             Color{175, 100, 100, 255});
+    y += 18;
+    drawHpDamageBar(cx, cw, y,
+                    fc.defenderHpBefore, fc.defenderHpAfter,
+                    def->getMaxHealth(), fc.lethal, flash);
+
+    // ── RETALIATION ──────────────────────────────────────────────────────────
+    if (fc.lethal) {
         y += 4;
-        DrawLine(cx, y, cx + cw, y, Color{55, 55, 75, 160});
-        y += 10;
-        DrawText("RETALIATION", cx, y, 11, Color{130, 130, 155, 255});
-        drawHitBadge(cx, cw, y, fc.retaliationHitChance);
-        y += 16;
-        drawForecastRow(cx, cw, y, unitName(def->getType()), playerColor(def->getOwner().getId()),
-                        fc.retaliation, fc.attackerHpBefore, fc.attackerHpAfter, fc.attackerDies);
+        DrawText("No retaliation -- target eliminated.", cx, y, 12, Color{100, 145, 100, 255});
+        y += 18;
+    } else if (fc.retaliation > 0) {
+        y += 8;
+        DrawLine(cx, y, cx + cw, y, Color{55, 55, 75, 120});
+        y += 12;
+        DrawText("RETALIATION", cx, y, 16, Color{160, 110, 220, 255});
+        y += 22;
+        drawHitChanceRow(cx, cw, y, fc.retaliationHitChance);
+
+        DrawText(unitName(atk->getType()), cx, y, 14, atkCol);
+        DrawText("loses HP", cx + cw - MeasureText("loses HP", 11), y + 2, 11,
+                 Color{175, 100, 100, 255});
+        y += 18;
+        drawHpDamageBar(cx, cw, y,
+                        fc.attackerHpBefore, fc.attackerHpAfter,
+                        atk->getMaxHealth(), fc.attackerDies, flash);
     }
 }
 
@@ -307,7 +434,8 @@ InformationView::InformationView() {}
 void InformationView::render(const World& world,
                              const Position* hoverPos,
                              const Position* selectedPos,
-                             int panelX, int panelW, int screenH) const {
+                             int panelX, int panelW, int screenH,
+                             std::optional<ControllerAction> pendingAction) const {
     const int PAD = 14;
     const int cx  = panelX + PAD;
     const int cw  = panelW - PAD * 2;
@@ -316,7 +444,7 @@ void InformationView::render(const World& world,
     DrawLine(panelX, 0, panelX, screenH, Color{55, 55, 75, 255});
 
     int y = 70;
-    DrawText("TILE INFO", cx, y, 14, Color{140, 140, 165, 255});
+    DrawText("INFO", cx, y, 14, Color{140, 140, 165, 255});
     y += 20;
     DrawLine(cx, y, cx + cw, y, Color{55, 55, 75, 200});
     y += 16;
@@ -326,23 +454,50 @@ void InformationView::render(const World& world,
         return;
     }
 
-    const Tile&   tile = world.getTileAt(*hoverPos);
-    const Terrain ter  = tile.getTerrain();
+    const Tile& tile = world.getTileAt(*hoverPos);
 
-    renderTerrainSection(cx, cw, y, ter);
+    // 1. Terrain section — always shown for the hovered tile.
+    renderTerrainSection(cx, cw, y, tile.getTerrain());
 
-    if (tile.hasUnit()) {
-        const Unit* u = world.getUnit(tile.getUnit().value());
-        if (u) renderUnitSection(cx, cw, y, u);
+    // 2. Actor section — show the selected unit (the one that will act).
+    //    Falls back to the hovered unit when nothing is selected.
+    const Unit* actor  = nullptr;
+    bool        isActorSelected = false;
+    if (selectedPos && world.hasUnitAt(*selectedPos)) {
+        actor          = world.getUnitAt(*selectedPos);
+        isActorSelected = true;
+    } else if (tile.hasUnit()) {
+        actor = world.getUnit(tile.getUnit().value());
     }
+    if (actor) renderUnitSection(cx, cw, y, actor, isActorSelected);
 
+    // 3. City section — from the hovered tile.
     if (tile.hasCity())
         renderCitySection(cx, cw, y, world, tile, tile.getCity());
 
-    if (!selectedPos || !tile.hasUnit() || !world.hasUnitAt(*selectedPos)) return;
-    const Unit* sel = world.getUnitAt(*selectedPos);
+    // 4. Forecast section
+    if (!selectedPos || !tile.hasUnit()) return;
+    const Unit* sel = world.hasUnitAt(*selectedPos) ? world.getUnitAt(*selectedPos) : nullptr;
+    if (!sel) return;
     const Unit* def = world.getUnit(tile.getUnit().value());
-    if (!sel || !def || sel->sameOwner(*def)) return;
+    if (!def || sel->sameOwner(*def)) return;
 
+    // Charge forecast — when CHARGE is pending and the hovered enemy is in a charge lane
+    if (pendingAction == ControllerAction::CHG &&
+        sel->getType() == UnitType::CAVALRY && hoverPos) {
+        static const int DRS[4] = {-1, 1, 0, 0};
+        static const int DCS[4] = { 0, 0, -1, 1};
+        bool inLane = false;
+        for (int d = 0; d < 4 && !inLane; ++d) {
+            auto path = world.previewChargeInDir(*selectedPos, DRS[d], DCS[d]);
+            if (path.hitEnemy && path.enemyPos == *hoverPos) inLane = true;
+        }
+        if (inLane) {
+            renderChargeForecast(cx, cw, y, sel, def);
+            return;
+        }
+    }
+
+    // Regular combat forecast
     renderCombatForecast(cx, cw, y, world, sel, def, *selectedPos, *hoverPos);
 }

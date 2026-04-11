@@ -1,5 +1,6 @@
 #pragma once
 #include <optional>
+#include <array>
 #include "raylib.h"
 #include "model/world.h"
 #include "model/tile.h"
@@ -42,6 +43,11 @@ public:
     void loadTerrainSprite(Terrain t, const char* path);
     void loadUnitSprite(UnitType t, const char* path);
 
+    /** Draw charge lane overlay (4 directions). Call after render() inside BeginMode2D. */
+    void renderChargeOverlay(const Position& cavalryPos,
+                             const std::array<World::ChargePath, 4>& paths,
+                             const World& world);
+
     // Scroll-arrow button slots (positioned at construction; wired to input later).
     Rect arrowUp, arrowDown, arrowLeft, arrowRight;
 
@@ -74,3 +80,4 @@ private:
     /** Draw path arrows over all tiles in one post-pass (called after the cell loop). */
     void renderPathArrows(const std::vector<Position>& path);
 };
+

@@ -578,3 +578,128 @@ void GridView::renderAttackableLayer(int px, int py) {
     DrawLineEx(bot, lt,  1.5f, Color{255, 80,  80,  210});
     DrawLineEx(lt,  top, 1.5f, Color{255, 80,  80,  210});
 }
+
+void GridView::renderChargeOverlay(
+    const Position& cavalryPos,
+    const std::array<World::ChargePath, 4>& paths,
+    const World& world)
+{
+    static const int DRS[4] = {-1,  1,  0, 0};
+    static const int DCS[4] = { 0,  0, -1, 1};
+
+    const float t     = (float)GetTime();
+    const float pulse = 0.5f + 0.5f * sinf(t * 3.0f);
+
+    for (int d = 0; d < 4; ++d) {
+        int dr = DRS[d], dc = DCS[d];
+        const World::ChargePath& path = paths[d];
+
+        // Skip directions where cavalry is completely blocked at step 1
+        if (path.finalPos == cavalryPos && !path.hitEnemy) continue;
+
+        Position cur = cavalryPos;
+        for (int step = 1; step <= 6; ++step) {
+            int nr = cur.row() + dr, nc = cur.col() + dc;
+            if (nr < 0 || nr >= Game::HEIGHT || nc < 0 || nc >= Game::WIDTH) break;
+            Position next(nr, nc);
+
+            int px, py;
+            isoTopVertex(nr, nc, px, py);
+
+            Vector2 top = {(float)px,               (float)py};
+            Vector2 rt  = {(float)(px + ISO_HALF_W), (float)(py + ISO_HALF_H)};
+            Vector2 bot = {(float)px,               (float)(py + ISO_TILE_H)};
+            Vector2 lt  = {(float)(px - ISO_HALF_W), (float)(py + ISO_HALF_H)};
+
+            bool isFinal = (next == path.finalPos);
+            bool isEnemy = (path.hitEnemy && next == path.enemyPos);
+
+            // Fade: strongest near cavalry, fades with distance
+            float dist = 1.0f - (float)(step - 1) / 6.5f;
+
+            if (isEnemy) {
+                // Red tile — enemy hit by charge
+                unsigned char fa = (unsigned char)(70 + 100 * pulse);
+                unsigned char ba = (unsigned char)(160 + 95 * pulse);
+                DrawTriangle(top, lt, bot, Color{220, 40, 40, fa});
+                DrawTriangle(top, bot, rt, Color{220, 40, 40, fa});
+                DrawLineEx(top, rt,  2.5f, Color{255, 80, 80, ba});
+                DrawLineEx(rt,  bot, 2.5f, Color{255, 80, 80, ba});
+                DrawLineEx(bot, lt,  2.5f, Color{255, 80, 80, ba});
+                DrawLineEx(lt,  top, 2.5f, Color{255, 80, 80, ba});
+
+                // Charge damage label above the enemy
+                const Unit* cav   = world.getUnitAt(cavalryPos);
+                const Unit* enemy = world.getUnitAt(next);
+                if (cav && enemy) {
+                    int dmg    = cav->computeChargeDamageAgainst(*enemy);
+                    int hpLeft = std::max(0, enemy->getHealth() - dmg);
+                    bool fatal = (hpLeft == 0);
+                    Color dmgCol = fatal ? Color{255, 80, 80, 255} : Color{255, 200, 60, 255};
+                    const char* dmgStr = TextFormat("!%d", dmg);
+                    int tw = MeasureText(dmgStr, 18);
+                    // Drop shadow then label
+                    DrawText(dmgStr, px - tw/2 + 1, py - ISO_HALF_H - 25 + 1, 18, Color{0, 0, 0, 120});
+                    DrawText(dmgStr, px - tw/2,     py - ISO_HALF_H - 25,     18, dmgCol);
+                    if (fatal) {
+                        const int fw = MeasureText("FATAL", 11);
+                        DrawText("FATAL", px - fw/2, py - ISO_HALF_H - 9, 11, Color{255, 100, 100, 255});
+                    }
+                }
+                break; // no tiles past the enemy
+            }
+
+            // Blue lane tile
+            unsigned char fa = (unsigned char)(dist * 55.0f);
+            unsigned char ba = (unsigned char)(dist * (110.0f + 80.0f * pulse));
+            DrawTriangle(top, lt, bot, Color{60, 140, 255, fa});
+            DrawTriangle(top, bot, rt, Color{60, 140, 255, fa});
+            DrawLineEx(top, rt,  2.0f, Color{80, 170, 255, ba});
+            DrawLineEx(rt,  bot, 2.0f, Color{80, 170, 255, ba});
+            DrawLineEx(bot, lt,  2.0f, Color{80, 170, 255, ba});
+            DrawLineEx(lt,  top, 2.0f, Color{80, 170, 255, ba});
+
+            // Landing-zone rings at the cavalry's final stop tile
+            if (isFinal) {
+                float cx_f = (float)px;
+                float cy_f = (float)(py + ISO_HALF_H);
+                unsigned char ga = (unsigned char)(70 + 80 * pulse);
+                DrawCircleLines((int)cx_f, (int)cy_f, 14,
+                                Color{160, 220, 255, (unsigned char)(ga + 60)});
+                DrawCircleLines((int)cx_f, (int)cy_f, 9,
+                                Color{200, 240, 255, (unsigned char)(ga + 90)});
+            }
+
+            // Direction arrow in screen-space isometric direction
+            {
+                float cx_f = (float)px;
+                float cy_f = (float)(py + ISO_HALF_H);
+
+                // Isometric screen direction for grid (dr, dc):
+                //   sdx = (-dr + dc) * ISO_HALF_W
+                //   sdy = ( dr + dc) * ISO_HALF_H
+                float sdx  = (float)((-dr + dc) * ISO_HALF_W);
+                float sdy  = (float)(( dr + dc) * ISO_HALF_H);
+                float slen = sqrtf(sdx * sdx + sdy * sdy);
+                if (slen > 0.001f) {
+                    sdx /= slen; sdy /= slen;
+                    float px2 = -sdy, py2 = sdx;  // perpendicular
+
+                    const float AL = 11.0f, AW = 5.5f, AB = 5.0f;
+                    Vector2 tip   = {cx_f + sdx * AL,                cy_f + sdy * AL};
+                    Vector2 baseL = {cx_f - sdx * AB + px2 * AW, cy_f - sdy * AB + py2 * AW};
+                    Vector2 baseR = {cx_f - sdx * AB - px2 * AW, cy_f - sdy * AB - py2 * AW};
+
+                    unsigned char aa = (unsigned char)(dist * (90.0f + 90.0f * pulse));
+                    // Shadow
+                    DrawTriangle({tip.x+1,tip.y+1},{baseL.x+1,baseL.y+1},{baseR.x+1,baseR.y+1},
+                                 Color{0,0,0,(unsigned char)(aa/3)});
+                    DrawTriangle(tip, baseL, baseR, Color{180, 220, 255, aa});
+                }
+            }
+
+            if (isFinal) break;
+            cur = next;
+        }
+    }
+}

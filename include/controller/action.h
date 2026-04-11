@@ -37,7 +37,8 @@ enum class ControllerAction {
     MOV,
     ATT,
     CON,
-    TRN
+    TRN,
+    CHG   // Cavalry charge — straight-line rush up to 6 tiles
 };
 
 /**

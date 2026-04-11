@@ -12,7 +12,7 @@
 #include <algorithm>
 
 int World::calcHitChance(const Unit& attacker, const Unit& defender) {
-    int pct = 80 + (attacker.getPrecision() - defender.getAgility()) * 2;
+    int pct = 65 + (attacker.getPrecision() - defender.getAgility()) * 3;
     return std::max(25, std::min(95, pct));
 }
 
@@ -105,6 +105,7 @@ void World::nextTurn() {
         if (unit->getOwner().getId() == currentPlayerId) {
             unit->setMoved(false);
             unit->setAttacked(false);
+            unit->setCharged(false);
         }
     }
 
@@ -168,6 +169,42 @@ std::optional<PlayerError> World::applyControllerRequest(ControllerRequest actio
                 defender->getHealth(), *defender,
                 attacker->getHealth(), *attacker
             );
+            auto result = cmd->execute(*this);
+            if (!result.has_value()) {
+                commandHistory.push_back(std::move(cmd));
+            }
+            return result;
+        }
+
+        case (ControllerAction::CHG): {
+            // Snap direction to the dominant cardinal axis
+            int dr = destination.row() - origin.row();
+            int dc = destination.col() - origin.col();
+            if (dr == 0 && dc == 0) return PlayerError::INVALIDTARGET;
+            if (std::abs(dr) >= std::abs(dc)) dc = 0; else dr = 0;
+            dr = (dr > 0) ? 1 : (dr < 0) ? -1 : 0;
+            dc = (dc > 0) ? 1 : (dc < 0) ? -1 : 0;
+
+            const Unit* cavalry = getUnitAt(origin);
+            if (!cavalry) return PlayerError::INVALIDTARGET;
+
+            // Pre-compute path so ChargeCommand can store it for undo.
+            auto path = previewChargeInDir(origin, dr, dc);
+
+            int          enemyHpBefore = 0;
+            std::optional<Unit> enemySnap;
+            if (path.hitEnemy && hasUnitAt(path.enemyPos)) {
+                const Unit* enemy = getUnitAt(path.enemyPos);
+                if (enemy) {
+                    enemyHpBefore = enemy->getHealth();
+                    enemySnap     = *enemy;
+                }
+            }
+
+            auto cmd = std::make_unique<ChargeCommand>(
+                origin, destination, action.getPlayer(),
+                path.finalPos, path.hitEnemy, path.enemyPos,
+                enemyHpBefore, std::move(enemySnap));
             auto result = cmd->execute(*this);
             if (!result.has_value()) {
                 commandHistory.push_back(std::move(cmd));
@@ -240,44 +277,62 @@ void World::battle(const Position& attackerPos, const Position& defenderPos) {
         throw std::logic_error("Battle requires units at both positions");
     }
 
+    retaliationPending_ = false;
+
     // ── Initial strike ──────────────────────────────────────────────────────
     bool hit = (std::rand() % 100) < calcHitChance(*attacker, *defender);
     attacker->setAttacked(true);
 
     if (hit) {
-        int dmg = attacker->computeDamageAgainst(*defender, true);  // initiator
+        int dmg = attacker->computeDamageAgainst(*defender, true);
         defender->lowerHP(dmg);
         notifyObservers(DamageDealtEvent{defenderPos, dmg, false});
     } else {
-        notifyObservers(DamageDealtEvent{defenderPos, 0, true});    // miss
+        notifyObservers(DamageDealtEvent{defenderPos, 0, true});
     }
 
-    // ── Retaliation ─────────────────────────────────────────────────────────
-    if (defender->isAlive() && battleSystem.canAttack(defenderPos, attackerPos)) {
-        bool retHit = (std::rand() % 100) < calcHitChance(*defender, *attacker);
-        if (retHit) {
-            int retDmg = defender->computeDamageAgainst(*attacker, false); // not initiating
-            attacker->lowerHP(retDmg);
-            notifyObservers(DamageDealtEvent{attackerPos, retDmg, false});
-        } else {
-            notifyObservers(DamageDealtEvent{attackerPos, 0, true});       // miss
-        }
-    }
-
-    // ── Remove dead units (defender first, then attacker) ───────────────────
+    // ── Remove defender if killed — no retaliation possible ─────────────────
     if (!defender->isAlive()) {
         auto defenderId = getTileAt(defenderPos).removeUnit();
         if (defenderId.has_value()) {
             notifyObservers(UnitDiedEvent{defenderId.value(), defenderPos});
             units.erase(defenderId.value());
         }
+        return;
     }
 
-    if (!attacker->isAlive()) {
-        auto attackerId = getTileAt(attackerPos).removeUnit();
-        if (attackerId.has_value()) {
-            notifyObservers(UnitDiedEvent{attackerId.value(), attackerPos});
-            units.erase(attackerId.value());
+    // ── Queue retaliation for later (fired by executePendingRetaliation) ─────
+    if (battleSystem.canAttack(defenderPos, attackerPos)) {
+        retaliationPending_      = true;
+        retaliatorPos_           = defenderPos;
+        retaliationTargetPos_    = attackerPos;
+    }
+}
+
+void World::executePendingRetaliation() {
+    if (!retaliationPending_) return;
+    retaliationPending_ = false;
+
+    Unit* retaliator = getUnitAt(retaliatorPos_);
+    Unit* target     = getUnitAt(retaliationTargetPos_);
+    if (!retaliator || !target) return;
+
+    // ── Retaliation strike ───────────────────────────────────────────────────
+    bool retHit = (std::rand() % 100) < calcHitChance(*retaliator, *target);
+    if (retHit) {
+        int retDmg = retaliator->computeDamageAgainst(*target, false);
+        target->lowerHP(retDmg);
+        notifyObservers(DamageDealtEvent{retaliationTargetPos_, retDmg, false});
+    } else {
+        notifyObservers(DamageDealtEvent{retaliationTargetPos_, 0, true});
+    }
+
+    // ── Remove attacker if killed ────────────────────────────────────────────
+    if (!target->isAlive()) {
+        auto targetId = getTileAt(retaliationTargetPos_).removeUnit();
+        if (targetId.has_value()) {
+            notifyObservers(UnitDiedEvent{targetId.value(), retaliationTargetPos_});
+            units.erase(targetId.value());
         }
     }
 }
@@ -439,4 +494,87 @@ World WorldFactory::create(WorldLayout layout, std::vector<Player> players) {
     }
 
     return world;
+}
+
+// ---------------------------------------------------------------------------
+// Cavalry Charge
+// ---------------------------------------------------------------------------
+
+World::ChargePath World::previewChargeInDir(const Position& from, int dr, int dc) const {
+    ChargePath path;
+    path.finalPos = from;
+    if (dr == 0 && dc == 0) return path;
+
+    const Unit* unit = getUnitAt(from);
+    if (!unit) return path;
+
+    Position current = from;
+    for (int step = 0; step < 6; ++step) {
+        int nr = current.row() + dr;
+        int nc = current.col() + dc;
+        if (nr < 0 || nr >= Game::HEIGHT || nc < 0 || nc >= Game::WIDTH) break;
+        Position next(nr, nc);
+        const Tile& nextTile = getTileAt(next);
+        if (!nextTile.isWalkable()) break;
+        if (nextTile.hasUnit()) {
+            const Unit* occupant = getUnitAt(next);
+            if (!occupant || occupant->sameOwner(*unit)) break;
+            path.finalPos = current;
+            path.hitEnemy = true;
+            path.enemyPos = next;
+            return path;
+        }
+        current = next;
+    }
+    path.finalPos = current;
+    return path;
+}
+
+World::ChargePath World::previewCharge(const Position& from, const Position& dirTarget) const {
+    int dr = (dirTarget.row() > from.row()) ? 1 : (dirTarget.row() < from.row()) ? -1 : 0;
+    int dc = (dirTarget.col() > from.col()) ? 1 : (dirTarget.col() < from.col()) ? -1 : 0;
+    return previewChargeInDir(from, dr, dc);
+}
+
+std::optional<PlayerError> World::executeCharge(const Position& from,
+                                                  const ChargePath& path,
+                                                  const Player& player) {
+    Unit* unit = getUnitAt(from);
+    if (!unit)                              return PlayerError::INVALIDTARGET;
+    if (!unit->sameOwner(player))           return PlayerError::INVALIDTARGET;
+    if (!unit->canCharge())                 return PlayerError::UNITCANTMOVE;
+    if (unit->getType() != UnitType::CAVALRY) return PlayerError::NOTSUPPORTED;
+
+    // Move cavalry to its final position (moveUnit sets moved = true)
+    if (path.finalPos != from) {
+        moveUnit(from, path.finalPos);
+    } else {
+        unit->setMoved(true);
+    }
+
+    // Re-fetch pointer after potential tile change
+    Unit* cav = getUnitAt(path.finalPos);
+    if (!cav) return PlayerError::INVALIDTARGET;
+    cav->setCharged(true);
+
+    // Strike the enemy if the charge collided with one
+    if (path.hitEnemy) {
+        Unit* enemy = getUnitAt(path.enemyPos);
+        if (enemy) {
+            int dmg = cav->computeChargeDamageAgainst(*enemy);
+            enemy->lowerHP(dmg);
+            cav->setAttacked(true);
+            notifyObservers(DamageDealtEvent{path.enemyPos, dmg, false});
+
+            if (!enemy->isAlive()) {
+                auto enemyId = getTileAt(path.enemyPos).removeUnit();
+                if (enemyId.has_value()) {
+                    notifyObservers(UnitDiedEvent{enemyId.value(), path.enemyPos});
+                    units.erase(enemyId.value());
+                }
+            }
+        }
+    }
+
+    return std::nullopt;
 }

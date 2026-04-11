@@ -76,8 +76,8 @@ struct UnitTemplate {
     int spc;   // special    — flat non-physical (Mage) attack bonus
     int def;   // defense    — flat physical damage reduction
     int res;   // resistance — flat non-physical damage reduction
-    int prec;  // precision  — +2% hit chance per point (base 80%)
-    int agi;   // agility    — −2% hit chance per attacker point
+    int prec;  // precision  — +3% hit chance per point (base 80%)
+    int agi;   // agility    — −3% hit chance per attacker point
     int ini;   // initiative — bonus damage only when this unit initiates
     int grd;   // guard      — flat reduction to any incoming attack
 };
@@ -134,11 +134,12 @@ public:
         : id(id), type(type), player(player),
           tmpl(tmpl),
           health(tmpl ? tmpl->maxHealth : 0),
-          moved(false), attacked(false) {}
+          moved(false), attacked(false), charged(false) {}
 
-    bool isAlive()   const { return health > 0; }
-    bool canMove()   const { return !moved && !attacked; }
-    bool canAttack() const { return !attacked; }
+    bool isAlive()    const { return health > 0; }
+    bool canMove()    const { return !moved && !attacked && !charged; }
+    bool canAttack()  const { return !attacked && !charged; }
+    bool canCharge()  const { return !moved && !attacked && !charged; }
 
     UnitId          getId()        const { return id; }
     int             getHealth()    const { return health; }
@@ -165,10 +166,10 @@ public:
      */
     int computeDamageAgainst(const Unit& defender, bool isInitiator = true) const {
         bool isMage = (type == UnitType::MAGE);
-        int atk     = isMage ? tmpl->spc : tmpl->str;
-        int mit     = isMage ? defender.tmpl->res : defender.tmpl->def;
-        int raw     = atk + (isInitiator ? tmpl->ini : 0)
-                      - mit - defender.tmpl->grd;
+        int atk     = (isMage ? tmpl->spc : tmpl->str) * 5;
+        int mit     = (isMage ? defender.tmpl->res : defender.tmpl->def) * 2;
+        int raw     = atk + (isInitiator ? tmpl->ini * 4 : 0)
+                      - mit - defender.tmpl->grd * 2;
         int dmg = std::max(1, raw);
         for (const auto& mod : modifiers)
             dmg = mod->modify(dmg, *this, defender);
@@ -177,11 +178,23 @@ public:
 
     void setMoved(bool flag)    { moved    = flag; }
     void setAttacked(bool flag) { attacked = flag; }
+    void setCharged(bool flag)  { charged  = flag; }
+
+    /**
+     * Heavy strike used only during a Cavalry charge.
+     * Deals str × 12, reduced only by the defender's defense. Guard is ignored.
+     */
+    int computeChargeDamageAgainst(const Unit& defender) const {
+        int atk = tmpl->str * 12;
+        int mit = defender.tmpl->def * 2;
+        return std::max(1, atk - mit);
+    }
 
     // True when the unit can neither move nor attack this turn.
-    bool isExhausted() const { return attacked; }
+    bool isExhausted() const { return attacked || charged; }
 
     bool hasMoved()    const { return moved; }
+    bool hasCharged()  const { return charged; }
 
     /**
      * Sets health directly — used by command undo to restore pre-combat HP.
@@ -226,6 +239,7 @@ private:
     int  health;
     bool moved;
     bool attacked;
+    bool charged;
 
     std::vector<std::shared_ptr<DamageModifier>> modifiers;
 };

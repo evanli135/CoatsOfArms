@@ -6,6 +6,7 @@
 #include "model/util.h"
 #include "raylib.h"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -108,8 +109,23 @@ void GUI::render(const World& world,
             if (currentMode == ControllerMode::TACTIC) {
                 if (actionLabels.size() > 0) enabledActions[0] = selUnit->canMove();
                 if (actionLabels.size() > 1) enabledActions[1] = selUnit->canAttack();
+                if (actionLabels.size() > 2) enabledActions[2] = selUnit->canCharge();
             }
         }
+    }
+
+    // Charge lane overlay — active when CHARGE button is pending for a Cavalry unit
+    static const std::array<std::pair<int,int>, 4> CHARGE_DIRS = {{{-1,0},{1,0},{0,-1},{0,1}}};
+    bool chargePending = (pendingActionIndex == 2 &&
+                          currentMode == ControllerMode::TACTIC &&
+                          selectedPos && world.hasUnitAt(*selectedPos) &&
+                          world.getUnitAt(*selectedPos)->getType() == UnitType::CAVALRY);
+    std::array<World::ChargePath, 4> chargePaths{};
+    if (chargePending) {
+        for (int d = 0; d < 4; ++d)
+            chargePaths[d] = world.previewChargeInDir(*selectedPos,
+                                                       CHARGE_DIRS[d].first,
+                                                       CHARGE_DIRS[d].second);
     }
 
     // Map viewport: clip + zoom (trackpad / wheel). UI stays unscaled.
@@ -123,6 +139,9 @@ void GUI::render(const World& world,
         BeginMode2D(cam);
 
         gridView->render(frameLayout_, world, &hoverPos, selectedPos, reachable, attackable, lethal, path);
+
+        if (chargePending)
+            gridView->renderChargeOverlay(*selectedPos, chargePaths, world);
 
         damageIndicators.update(GetFrameTime());
         damageIndicators.render();
@@ -150,7 +169,9 @@ void GUI::render(const World& world,
 
     // Info panel (right panel)
     informationView->render(world, &hoverPos, selectedPos,
-                              frameLayout_.infoPanelX, frameLayout_.infoPanelW, frameLayout_.screenH);
+                              frameLayout_.infoPanelX, frameLayout_.infoPanelW, frameLayout_.screenH,
+                              chargePending ? std::optional<ControllerAction>{ControllerAction::CHG}
+                                           : std::nullopt);
 
     // END TURN button
     bool allDone = world.allUnitsExhausted();

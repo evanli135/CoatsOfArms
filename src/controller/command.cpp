@@ -78,3 +78,44 @@ void TrainCommand::undo(World& world) {
         city->clearTraining();
     }
 }
+
+
+// ---------------------------------------------------------------------------
+// ChargeCommand
+// ---------------------------------------------------------------------------
+
+std::optional<PlayerError> ChargeCommand::execute(World& world) {
+    World::ChargePath path;
+    path.finalPos = chargeFinalPos;
+    path.hitEnemy = hitEnemy;
+    path.enemyPos = enemyPos;
+    return world.executeCharge(from, path, player);
+}
+
+void ChargeCommand::undo(World& world) {
+    // Move cavalry back from its final charge position to origin.
+    if (world.hasUnitAt(chargeFinalPos)) {
+        if (chargeFinalPos != from) {
+            world.moveUnit(chargeFinalPos, from);  // sets moved=true internally
+        }
+        if (Unit* cav = world.getUnitAt(from)) {
+            cav->setMoved(false);
+            cav->setAttacked(false);
+            cav->setCharged(false);
+        }
+    }
+
+    // Restore the enemy unit if the charge collided with one.
+    if (hitEnemy) {
+        if (world.hasUnitAt(enemyPos)) {
+            // Enemy survived the charge — restore its HP.
+            world.getUnitAt(enemyPos)->setHealth(enemyHpBefore);
+        } else if (enemySnapshot.has_value()) {
+            // Enemy was killed by the charge — re-add it.
+            try {
+                world.addUnit(enemyPos, *enemySnapshot);
+                world.getUnitAt(enemyPos)->setHealth(enemyHpBefore);
+            } catch (...) {}
+        }
+    }
+}

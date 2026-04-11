@@ -30,11 +30,27 @@ int main() {
     model.startGame();
 
     Position keyHover(0, 0);
+    float retaliationTimer = -1.0f;  // negative = inactive
 
     while (!WindowShouldClose()) {
         if (IsKeyPressed(KEY_Q)) break;
 
         Controller& active = controller1.isMyTurn() ? controller1 : controller2;
+
+        // --- Retaliation timer — start when battle() queues a pending strike ---
+        if (model.hasPendingRetaliation() && retaliationTimer < 0.0f)
+            retaliationTimer = 0.7f;
+
+        if (retaliationTimer >= 0.0f) {
+            retaliationTimer -= GetFrameTime();
+            if (retaliationTimer <= 0.0f) {
+                retaliationTimer = -1.0f;
+                model.executePendingRetaliation();
+            }
+        }
+
+        // Block all game-modifying input while the retaliation is in flight.
+        const bool inputLocked = model.hasPendingRetaliation() || retaliationTimer >= 0.0f;
 
         // --- Arrow key grid scroll (continuous) ---
         const int SCROLL_SPEED = 8;
@@ -63,6 +79,7 @@ int main() {
         if (IsKeyPressed(KEY_A)) tryMoveKb( 0, -1);
         if (IsKeyPressed(KEY_D)) tryMoveKb( 0,  1);
 
+        if (!inputLocked) {
         // --- Keyboard game actions ---
         auto applyResult = [&](std::optional<PlayerError> err) {
             if (err) view.setError(*err); else view.clearError();
@@ -105,6 +122,8 @@ int main() {
         if (pollMouseRightClick())
             active.onRightClick();
 
+        } // end !inputLocked
+
         BeginDrawing();
 
         // Map pending ControllerAction → button index for the active-button highlight
@@ -113,6 +132,7 @@ int main() {
             switch (*pa) {
                 case ControllerAction::MOV: pendingIdx = 0; break;
                 case ControllerAction::ATT: pendingIdx = 1; break;
+                case ControllerAction::CHG: pendingIdx = 2; break;
                 default: break;
             }
         }

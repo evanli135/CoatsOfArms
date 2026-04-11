@@ -92,6 +92,36 @@ private:
 
 
 // ---------------------------------------------------------------------------
+// ChargeCommand
+// Executes a Cavalry charge. Stores enough state to undo the move and any
+// enemy damage/death without needing a separate preview after execute.
+// ---------------------------------------------------------------------------
+
+class ChargeCommand : public GameCommand {
+public:
+    ChargeCommand(Position from, Position dirTarget, Player player,
+                  Position chargeFinalPos, bool hitEnemy, Position enemyPos,
+                  int enemyHpBefore, std::optional<Unit> enemySnapshot)
+        : from(from), dirTarget(dirTarget), player(player),
+          chargeFinalPos(chargeFinalPos), hitEnemy(hitEnemy), enemyPos(enemyPos),
+          enemyHpBefore(enemyHpBefore), enemySnapshot(std::move(enemySnapshot)) {}
+
+    std::optional<PlayerError> execute(World& world) override;
+    void undo(World& world) override;
+
+private:
+    Position from, dirTarget;
+    Player   player;
+
+    Position            chargeFinalPos;
+    bool                hitEnemy;
+    Position            enemyPos;
+    int                 enemyHpBefore;
+    std::optional<Unit> enemySnapshot;  // full copy if enemy was killed
+};
+
+
+// ---------------------------------------------------------------------------
 // TrainCommand
 // Trains a new unit at a city. Undo removes the trained unit and resets the
 // city's trainedThisTurn flag.

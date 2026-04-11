@@ -81,8 +81,8 @@ public:
     /** Returns the pending ControllerAction (MOV or ATT), or nullopt if none set. */
     std::optional<ControllerAction> getPendingAction() const override { return pendingAction; }
 
-    /** Returns {"MOV", "ATT"} — the two actions available in TACTIC mode. */
-    std::vector<std::string> getActionLabels() const override { return {"MOVE", "ATTACK"}; }
+    /** Returns action labels for the current selection (adds "CHARGE" for Cavalry). */
+    std::vector<std::string> getActionLabels() const override;
 
 private:
     World& world;

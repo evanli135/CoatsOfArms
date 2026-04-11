@@ -137,6 +137,35 @@ public:
     void moveUnit(const Position& from, const Position& to);
     void battle(const Position& attackerPos, const Position& defenderPos);
 
+    // -----------------------------------------------------------------------
+    // Cavalry Charge
+    // -----------------------------------------------------------------------
+
+    /** Result of simulating a charge path — no state is modified. */
+    struct ChargePath {
+        Position finalPos = Position(0, 0); // where cavalry ends up
+        bool     hitEnemy = false;
+        Position enemyPos = Position(0, 0); // valid only when hitEnemy == true
+    };
+
+    /** Simulates a charge from `from` in the direction of `dirTarget`.
+     *  Pure query — does not modify world state. */
+    ChargePath previewCharge(const Position& from, const Position& dirTarget) const;
+
+    /** Simulates a charge from `from` in cardinal direction (dr,dc). Pure query. */
+    ChargePath previewChargeInDir(const Position& from, int dr, int dc) const;
+
+    /** Executes a charge using a pre-computed path (called by ChargeCommand). */
+    std::optional<PlayerError> executeCharge(const Position& from,
+                                             const ChargePath& path,
+                                             const Player& player);
+
+    /** True if a retaliation strike is queued and waiting for the timer. */
+    bool hasPendingRetaliation() const { return retaliationPending_; }
+
+    /** Fires the queued retaliation strike; no-op if none is pending. */
+    void executePendingRetaliation();
+
     void addToConstructionQueue(const Position& pos, BuildingType buildingType);
 
     std::optional<PlayerError> applyControllerRequest(ControllerRequest action);
@@ -235,6 +264,11 @@ private:
     TrainingSystem trainingSystem;
 
     std::vector<std::unique_ptr<GameCommand>> commandHistory;
+
+    // Deferred retaliation — set by battle(), fired by executePendingRetaliation().
+    bool     retaliationPending_       = false;
+    Position retaliatorPos_            = Position(0, 0);
+    Position retaliationTargetPos_     = Position(0, 0);
 
     /** Hit chance (25–95%) for attacker vs defender based on precision/agility. */
     static int calcHitChance(const Unit& attacker, const Unit& defender);

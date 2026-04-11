@@ -80,15 +80,32 @@ std::optional<PlayerError> TacticMode::selectDestination(Position pos) {
 }
 
 // Set the pending action via an action button. Requires a unit to be selected first.
-// index 0 = MOV, index 1 = ATT
+// index 0 = MOV, index 1 = ATT, index 2 = CHG (Cavalry only)
 std::optional<PlayerError> TacticMode::onActionButton(int index) {
     if (!selection.has_value()) return PlayerError::INVALIDTARGET;
 
     switch (index) {
         case 0: pendingAction = ControllerAction::MOV; return std::nullopt;
         case 1: pendingAction = ControllerAction::ATT; return std::nullopt;
+        case 2: {
+            const Unit* unit = world.getUnitAt(*selection);
+            if (!unit || unit->getType() != UnitType::CAVALRY || !unit->canCharge())
+                return PlayerError::NOTSUPPORTED;
+            pendingAction = ControllerAction::CHG;
+            return std::nullopt;
+        }
         default: return PlayerError::NOTSUPPORTED;
     }
+}
+
+std::vector<std::string> TacticMode::getActionLabels() const {
+    if (selection.has_value()) {
+        const Unit* unit = world.getUnitAt(*selection);
+        if (unit && unit->getType() == UnitType::CAVALRY && unit->canCharge()) {
+            return {"MOVE", "ATTACK", "CHARGE"};
+        }
+    }
+    return {"MOVE", "ATTACK"};
 }
 
 void TacticMode::onDeselect() {
