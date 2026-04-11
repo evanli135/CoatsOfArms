@@ -2,6 +2,7 @@
 #include "model/util.h"
 #include "raylib.h"
 #include <algorithm>
+#include <utility>
 
 // ---------------------------------------------------------------------------
 // Layout constants — fake-isometric 12×12 grid (tile geometry is fixed).
@@ -100,19 +101,19 @@ namespace Layout {
         const int ox = L.gridOrigX;
         const int oy = L.gridOrigY;
 
+        // Scroll must stay in [min, max] with min <= max. When the viewport is
+        // narrower/shorter than the map, the raw formulas swap; collapsing to
+        // a midpoint (old behaviour) locked one axis — e.g. no horizontal pan
+        // on laptop widths while vertical still moved.
         scrollMinX = ox + halfW - playRight;
         scrollMaxX = ox - halfW - playLeft;
-        if (scrollMinX > scrollMaxX) {
-            const int m = (scrollMinX + scrollMaxX) / 2;
-            scrollMinX = scrollMaxX = m;
-        }
+        if (scrollMinX > scrollMaxX)
+            std::swap(scrollMinX, scrollMaxX);
 
         scrollMinY = oy + gh - playBottom;
         scrollMaxY = oy - playTop;
-        if (scrollMinY > scrollMaxY) {
-            const int m = (scrollMinY + scrollMaxY) / 2;
-            scrollMinY = scrollMaxY = m;
-        }
+        if (scrollMinY > scrollMaxY)
+            std::swap(scrollMinY, scrollMaxY);
     }
 }
 

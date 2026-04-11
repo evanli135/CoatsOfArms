@@ -7,6 +7,7 @@
 #include "raylib.h"
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <unordered_set>
 
 using namespace Layout;
@@ -223,12 +224,74 @@ bool GUI::pollEndTurn() {
     return endTurnButton.contains(GetMouseX(), GetMouseY());
 }
 
+bool GUI::isOverChrome(int mx, int my) const {
+    if (my < TITLE_TOP_MARGIN)
+        return true;
+    if (mx >= frameLayout_.infoPanelX)
+        return true;
+    for (const Rect& r : modeButtonSlots)
+        if (r.contains(mx, my)) return true;
+    for (const Rect& r : actionButtonSlots)
+        if (r.contains(mx, my)) return true;
+    if (endTurnButton.contains(mx, my))
+        return true;
+    return false;
+}
+
+void GUI::pollMapPan() {
+    updateLayout();
+    int mx = GetMouseX(), my = GetMouseY();
+    constexpr int kPanThresholdPx = 6;
+
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        if (isOverChrome(mx, my))
+            mapDragPhase_ = MapDragPhase::None;
+        else {
+            mapDragPhase_      = MapDragPhase::Armed;
+            mapDragStartX_     = mx;
+            mapDragStartY_     = my;
+            mapDragLastX_      = mx;
+            mapDragLastY_      = my;
+            mapDragStartedOnGrid_ = pixelToTile(mx, my).has_value();
+        }
+    }
+
+    if (mapDragPhase_ == MapDragPhase::Armed && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+        int manh = std::abs(mx - mapDragStartX_) + std::abs(my - mapDragStartY_);
+        if (manh >= kPanThresholdPx) {
+            mapDragPhase_ = MapDragPhase::Panning;
+            mapDragLastX_ = mx;
+            mapDragLastY_ = my;
+        }
+    }
+
+    if (mapDragPhase_ == MapDragPhase::Panning && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+        int dx = mx - mapDragLastX_;
+        int dy = my - mapDragLastY_;
+        mapDragLastX_ = mx;
+        mapDragLastY_ = my;
+        scrollGrid(-dx, -dy);
+    }
+}
+
 std::optional<ClickTarget> GUI::pollClick(const std::vector<std::string>& actionLabels) {
     updateLayout();
-    if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) return std::nullopt;
     int mx = GetMouseX(), my = GetMouseY();
 
-    if (auto pos = pixelToTile(mx, my)) return ClickTarget{*pos};
+    // Tile clicks are deferred to release so drag-pan does not select/move.
+    if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+        std::optional<ClickTarget> tileClick;
+        if (mapDragPhase_ == MapDragPhase::Armed && mapDragStartedOnGrid_) {
+            if (auto pos = pixelToTile(mx, my))
+                tileClick = ClickTarget{*pos};
+        }
+        mapDragPhase_ = MapDragPhase::None;
+        if (tileClick)
+            return tileClick;
+    }
+
+    if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+        return std::nullopt;
 
     for (int i = 0; i < (int)actionLabels.size() && i < (int)actionButtonSlots.size(); ++i)
         if (actionButtonSlots[i].contains(mx, my)) return ClickTarget{i};
@@ -236,6 +299,7 @@ std::optional<ClickTarget> GUI::pollClick(const std::vector<std::string>& action
     for (int i = 0; i < (int)modeButtonSlots.size(); ++i)
         if (modeButtonSlots[i].contains(mx, my)) return ClickTarget{static_cast<ControllerMode>(i)};
 
+    // Map / empty area: pollMapPan() arms drag; actual tile click on release above.
     return std::nullopt;
 }
 

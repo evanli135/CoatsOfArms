@@ -43,6 +43,9 @@ int main() {
         if (IsKeyDown(KEY_UP))    view.scrollGrid(0, -SCROLL_SPEED);
         if (IsKeyDown(KEY_DOWN))  view.scrollGrid(0,  SCROLL_SPEED);
 
+        // --- Click-drag map pan (must run before hover / click) ---
+        view.pollMapPan();
+
         // --- Mouse hover (syncs keyHover so WASD continues from mouse cursor) ---
         if (auto pos = view.pollHover()) {
             active.setHoverPosition(*pos);

@@ -47,6 +47,12 @@ public:
     /** Pan the grid viewport by (dpx, dpy) pixels. */
     void scrollGrid(int dpx, int dpy);
 
+    /**
+     * Click-and-drag on the map (outside chrome) pans the grid.
+     * Call once per frame before pollHover / pollClick.
+     */
+    void pollMapPan();
+
     /** Returns true if the END TURN button was clicked this frame. */
     bool pollEndTurn();
 
@@ -75,4 +81,14 @@ private:
 
     std::optional<Position> pixelToTile(int px, int py) const;
     std::pair<int,int>      tileToPixel(const Position& pos) const;
+
+    bool isOverChrome(int mx, int my) const;
+
+    enum class MapDragPhase { None, Armed, Panning };
+    MapDragPhase mapDragPhase_      = MapDragPhase::None;
+    int          mapDragStartX_     = 0;
+    int          mapDragStartY_     = 0;
+    int          mapDragLastX_      = 0;
+    int          mapDragLastY_      = 0;
+    bool         mapDragStartedOnGrid_ = false;
 };
