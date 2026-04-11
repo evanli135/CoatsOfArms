@@ -43,9 +43,17 @@ void GridView::loadUnitSprite(UnitType t, const char* path) {
 }
 
 void GridView::scrollBy(int dpx, int dpy) {
-    // 12×12 iso grid fits fully on 1920×1080 — no scroll range.
-    scrollOffsetX = std::clamp(scrollOffsetX + dpx, 0, 0);
-    scrollOffsetY = std::clamp(scrollOffsetY + dpy, 0, 0);
+    scrollOffsetX = std::clamp(scrollOffsetX + dpx, scrollMinX_, scrollMaxX_);
+    scrollOffsetY = std::clamp(scrollOffsetY + dpy, scrollMinY_, scrollMaxY_);
+}
+
+void GridView::applyScrollBounds(int scrollMinX, int scrollMaxX, int scrollMinY, int scrollMaxY) {
+    scrollMinX_ = scrollMinX;
+    scrollMaxX_ = scrollMaxX;
+    scrollMinY_ = scrollMinY;
+    scrollMaxY_ = scrollMaxY;
+    scrollOffsetX = std::clamp(scrollOffsetX, scrollMinX_, scrollMaxX_);
+    scrollOffsetY = std::clamp(scrollOffsetY, scrollMinY_, scrollMaxY_);
 }
 
 void GridView::resetScroll() {
@@ -55,12 +63,15 @@ void GridView::resetScroll() {
 
 // Painter's algorithm: render tiles in order of increasing (row + col)
 // so that tiles closer to the camera (larger row+col) draw over tiles further away.
-void GridView::render(const World& world, const Position* hoverPos, const Position* selectedPos,
+void GridView::render(const Layout::ViewLayout& layout,
+                      const World& world, const Position* hoverPos, const Position* selectedPos,
                       const std::vector<Position>& reachable,
                       const std::vector<Position>& attackable,
                       const std::vector<Position>& lethal,
                       const std::vector<Position>& path)
 {
+    gridOrigX_ = layout.gridOrigX;
+    gridOrigY_ = layout.gridOrigY;
     std::unordered_set<Position> reachableSet(reachable.begin(), reachable.end());
     std::unordered_set<Position> attackableSet(attackable.begin(), attackable.end());
     std::unordered_set<Position> lethalSet(lethal.begin(), lethal.end());
@@ -89,10 +100,9 @@ void GridView::render(const World& world, const Position* hoverPos, const Positi
 // Rendering pipeline
 // ---------------------------------------------------------------------------
 
-// Top vertex of tile (row,col) in screen space.
-static void isoTopVertex(int row, int col, int scrollX, int scrollY, int& px, int& py) {
-    px = GRID_ORIG_X + (col - row) * ISO_HALF_W - scrollX;
-    py = GRID_ORIG_Y + (col + row) * ISO_HALF_H - scrollY;
+void GridView::isoTopVertex(int row, int col, int& px, int& py) const {
+    px = gridOrigX_ + (col - row) * ISO_HALF_W - scrollOffsetX;
+    py = gridOrigY_ + (col + row) * ISO_HALF_H - scrollOffsetY;
 }
 
 void GridView::renderTerrainLayer(const Tile& tile, int px, int py) {
@@ -437,7 +447,7 @@ void GridView::renderAttackableHoverLayer(int px, int py) {
 void GridView::renderCell(const World& world, const Position& pos,
                           bool isHovered, bool isSelected, bool isReachable, bool isAttackable, bool isLethal) {
     int px, py;
-    isoTopVertex(pos.row(), pos.col(), scrollOffsetX, scrollOffsetY, px, py);
+    isoTopVertex(pos.row(), pos.col(), px, py);
     const Tile& tile = world.getTileAt(pos);
 
     // ── Tile-level layers (bottom → top, all drawn before the unit) ──────────
@@ -463,7 +473,7 @@ void GridView::renderPathArrows(const std::vector<Position>& path) {
     // Convert a grid position to the screen-space diamond centre
     auto tileCenter = [&](const Position& pos) -> Vector2 {
         int px, py;
-        isoTopVertex(pos.row(), pos.col(), scrollOffsetX, scrollOffsetY, px, py);
+        isoTopVertex(pos.row(), pos.col(), px, py);
         return { (float)px, (float)(py + ISO_HALF_H) };
     };
 

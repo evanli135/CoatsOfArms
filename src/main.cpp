@@ -10,6 +10,7 @@
 
 int main() {
     InitWindow(1920, 1080, "RevRoyale");
+    SetWindowState(FLAG_WINDOW_RESIZABLE);
     MaximizeWindow();
     SetTargetFPS(60);
 

@@ -15,22 +15,45 @@ using namespace Layout;
 // GUI
 // ---------------------------------------------------------------------------
 
+void GUI::updateLayout() {
+    screenWidth  = GetScreenWidth();
+    screenHeight = GetScreenHeight();
+    frameLayout_ = makeViewLayout(screenWidth, screenHeight);
+
+    int sminX, smaxX, sminY, smaxY;
+    gridScrollBounds(frameLayout_,
+                     LEFT_UI_RESERVE, frameLayout_.infoPanelX,
+                     TITLE_TOP_MARGIN, frameLayout_.screenH - BOTTOM_MARGIN,
+                     sminX, smaxX, sminY, smaxY);
+    gridView->applyScrollBounds(sminX, smaxX, sminY, smaxY);
+
+    modeButtonSlots.clear();
+    for (int i = 0; i < 3; ++i)
+        modeButtonSlots.push_back(Rect{
+            frameLayout_.actX + i * (ICON_SIZE + BTN_GAP),
+            frameLayout_.modeBtnY, ICON_SIZE, ICON_SIZE});
+
+    actionButtonSlots.clear();
+    for (int i = 0; i < 8; ++i)
+        actionButtonSlots.push_back(Rect{
+            frameLayout_.actX,
+            frameLayout_.actBtnY + i * (BTN_H + BTN_GAP),
+            BTN_W, BTN_H});
+
+    endTurnButton = Rect{
+        frameLayout_.actX,
+        frameLayout_.actBtnY + 8 * (BTN_H + BTN_GAP) + 16,
+        BTN_W + 24, BTN_H + 8};
+}
+
 GUI::GUI(int width, int height)
     : screenWidth(width), screenHeight(height)
 {
-    for (int i = 0; i < 3; ++i)
-        modeButtonSlots.push_back(Rect{ACT_X + i*(ICON_SIZE+BTN_GAP), MODE_BTN_Y, ICON_SIZE, ICON_SIZE});
-
-    for (int i = 0; i < 8; ++i)
-        actionButtonSlots.push_back(Rect{ACT_X, ACT_BTN_Y + i*(BTN_H+BTN_GAP), BTN_W, BTN_H});
-
-    // END TURN sits below the 8 action button slots with a small gap
-    endTurnButton = Rect{ACT_X, ACT_BTN_Y + 8*(BTN_H+BTN_GAP) + 16, BTN_W + 24, BTN_H + 8};
-
     errorView       = new ErrorView();
     informationView = new InformationView();
     actionView      = new ActionView();
     gridView        = new GridView();
+    updateLayout();
 }
 
 GUI::~GUI() {
@@ -47,6 +70,8 @@ void GUI::render(const World& world,
                  ControllerMode currentMode,
                  int pendingActionIndex)
 {
+    updateLayout();
+
     ClearBackground(Color{16, 16, 26, 255});
 
     // Title bar
@@ -86,7 +111,7 @@ void GUI::render(const World& world,
     }
 
     // Grid
-    gridView->render(world, &hoverPos, selectedPos, reachable, attackable, lethal, path);
+    gridView->render(frameLayout_, world, &hoverPos, selectedPos, reachable, attackable, lethal, path);
 
     // Damage indicators + explosions (above grid, below UI panels)
     damageIndicators.update(GetFrameTime());
@@ -95,7 +120,7 @@ void GUI::render(const World& world,
     explosions.render();
 
     // Error overlay
-    errorView->render(ERR_X, ERR_Y);
+    errorView->render(frameLayout_.errX, frameLayout_.errY);
 
     // Mode icon row (left panel)
     static const ControllerMode MODES[] = {
@@ -107,11 +132,12 @@ void GUI::render(const World& world,
     }
 
     // Action buttons (left panel)
-    DrawText("ACTIONS", ACT_X, ACT_BTN_Y-20, 14, Color{160, 160, 180, 255});
+    DrawText("ACTIONS", frameLayout_.actX, frameLayout_.actBtnY - 20, 14, Color{160, 160, 180, 255});
     actionView->render(actionLabels, actionButtonSlots, pendingActionIndex, enabledActions);
 
     // Info panel (right panel)
-    informationView->render(world, &hoverPos, selectedPos);
+    informationView->render(world, &hoverPos, selectedPos,
+                              frameLayout_.infoPanelX, frameLayout_.infoPanelW, frameLayout_.screenH);
 
     // END TURN button
     bool allDone = world.allUnitsExhausted();
@@ -191,12 +217,14 @@ void GUI::render(const World& world,
     DrawFPS(10, 10);
 }
 
-bool GUI::pollEndTurn() const {
+bool GUI::pollEndTurn() {
+    updateLayout();
     if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) return false;
     return endTurnButton.contains(GetMouseX(), GetMouseY());
 }
 
-std::optional<ClickTarget> GUI::pollClick(const std::vector<std::string>& actionLabels) const {
+std::optional<ClickTarget> GUI::pollClick(const std::vector<std::string>& actionLabels) {
+    updateLayout();
     if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) return std::nullopt;
     int mx = GetMouseX(), my = GetMouseY();
 
@@ -211,7 +239,8 @@ std::optional<ClickTarget> GUI::pollClick(const std::vector<std::string>& action
     return std::nullopt;
 }
 
-std::optional<Position> GUI::pollHover() const {
+std::optional<Position> GUI::pollHover() {
+    updateLayout();
     return pixelToTile(GetMouseX(), GetMouseY());
 }
 
@@ -223,8 +252,8 @@ std::optional<Position> GUI::pollHover() const {
 //   => col = floor((ax + ay) / 2),  row = floor((ay - ax) / 2)
 std::optional<Position> GUI::pixelToTile(int mx, int my) const {
     auto [scrollX, scrollY] = gridView->getScrollOffset();
-    float ax = (float)(mx - GRID_ORIG_X + scrollX) / (float)ISO_HALF_W;
-    float ay = (float)(my - GRID_ORIG_Y + scrollY) / (float)ISO_HALF_H;
+    float ax = (float)(mx - frameLayout_.gridOrigX + scrollX) / (float)ISO_HALF_W;
+    float ay = (float)(my - frameLayout_.gridOrigY + scrollY) / (float)ISO_HALF_H;
     int col = (int)std::floor((ax + ay) / 2.0f);
     int row = (int)std::floor((ay - ax) / 2.0f);
     if (row < 0 || row >= Game::HEIGHT || col < 0 || col >= Game::WIDTH)
@@ -238,8 +267,8 @@ void GUI::scrollGrid(int dpx, int dpy){ gridView->scrollBy(dpx, dpy); }
 
 std::pair<int,int> GUI::tileToPixel(const Position& pos) const {
     auto [scrollX, scrollY] = gridView->getScrollOffset();
-    int px = GRID_ORIG_X + (pos.col() - pos.row()) * ISO_HALF_W - scrollX;
-    int py = GRID_ORIG_Y + (pos.col() + pos.row()) * ISO_HALF_H - scrollY;
+    int px = frameLayout_.gridOrigX + (pos.col() - pos.row()) * ISO_HALF_W - scrollX;
+    int py = frameLayout_.gridOrigY + (pos.col() + pos.row()) * ISO_HALF_H - scrollY;
     return {px, py};
 }
 

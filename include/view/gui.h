@@ -34,10 +34,10 @@ public:
                 int pendingActionIndex = -1);
 
     /** Resolve a left-click to a ClickTarget.  Priority: grid > action > mode. */
-    std::optional<ClickTarget> pollClick(const std::vector<std::string>& actionLabels) const;
+    std::optional<ClickTarget> pollClick(const std::vector<std::string>& actionLabels);
 
     /** Grid tile under the cursor, or nullopt if off-grid. */
-    std::optional<Position> pollHover() const;
+    std::optional<Position> pollHover();
 
     void onModelChanged(const ModelEvent& event) override;
 
@@ -48,10 +48,13 @@ public:
     void scrollGrid(int dpx, int dpy);
 
     /** Returns true if the END TURN button was clicked this frame. */
-    bool pollEndTurn() const;
+    bool pollEndTurn();
 
 private:
     int screenWidth, screenHeight;
+    Layout::ViewLayout frameLayout_{};
+
+    void updateLayout();
 
     std::vector<Rect> actionButtonSlots;
     std::vector<Rect> modeButtonSlots;
