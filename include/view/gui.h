@@ -34,10 +34,10 @@ public:
                 int pendingActionIndex = -1);
 
     /** Resolve a left-click to a ClickTarget.  Priority: grid > action > mode. */
-    std::optional<ClickTarget> pollClick(const std::vector<std::string>& actionLabels) const;
+    std::optional<ClickTarget> pollClick(const std::vector<std::string>& actionLabels);
 
     /** Grid tile under the cursor, or nullopt if off-grid. */
-    std::optional<Position> pollHover() const;
+    std::optional<Position> pollHover();
 
     void onModelChanged(const ModelEvent& event) override;
 
@@ -47,11 +47,23 @@ public:
     /** Pan the grid viewport by (dpx, dpy) pixels. */
     void scrollGrid(int dpx, int dpy);
 
+    /**
+     * Click-and-drag on the map (outside chrome) pans the grid.
+     * Call once per frame before pollHover / pollClick.
+     */
+    void pollMapPan();
+
+    /** Trackpad / mouse wheel zoom over the map (ignored over chrome). */
+    void pollMapZoom();
+
     /** Returns true if the END TURN button was clicked this frame. */
-    bool pollEndTurn() const;
+    bool pollEndTurn();
 
 private:
     int screenWidth, screenHeight;
+    Layout::ViewLayout frameLayout_{};
+
+    void updateLayout();
 
     std::vector<Rect> actionButtonSlots;
     std::vector<Rect> modeButtonSlots;
@@ -72,4 +84,18 @@ private:
 
     std::optional<Position> pixelToTile(int px, int py) const;
     std::pair<int,int>      tileToPixel(const Position& pos) const;
+
+    bool isOverChrome(int mx, int my) const;
+
+    Camera2D mapCamera() const;
+
+    float mapZoom_ = 1.0f;
+
+    enum class MapDragPhase { None, Armed, Panning };
+    MapDragPhase mapDragPhase_      = MapDragPhase::None;
+    int          mapDragStartX_     = 0;
+    int          mapDragStartY_     = 0;
+    int          mapDragLastX_      = 0;
+    int          mapDragLastY_      = 0;
+    bool         mapDragStartedOnGrid_ = false;
 };

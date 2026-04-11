@@ -10,6 +10,7 @@
 
 int main() {
     InitWindow(1920, 1080, "RevRoyale");
+    SetWindowState(FLAG_WINDOW_RESIZABLE);
     MaximizeWindow();
     SetTargetFPS(60);
 
@@ -41,6 +42,10 @@ int main() {
         if (IsKeyDown(KEY_RIGHT)) view.scrollGrid( SCROLL_SPEED, 0);
         if (IsKeyDown(KEY_UP))    view.scrollGrid(0, -SCROLL_SPEED);
         if (IsKeyDown(KEY_DOWN))  view.scrollGrid(0,  SCROLL_SPEED);
+
+        // --- Click-drag map pan (must run before hover / click) ---
+        view.pollMapPan();
+        view.pollMapZoom();
 
         // --- Mouse hover (syncs keyHover so WASD continues from mouse cursor) ---
         if (auto pos = view.pollHover()) {

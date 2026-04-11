@@ -11,5 +11,6 @@ public:
     InformationView();
     void render(const World& world,
                 const Position* hoverPos,
-                const Position* selectedPos = nullptr) const;
+                const Position* selectedPos,
+                int panelX, int panelW, int screenH) const;
 };

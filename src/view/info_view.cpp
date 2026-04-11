@@ -1,11 +1,10 @@
 #include "view/info_view.h"
 #include "view/layout.h"
+#include <algorithm>
 #include "model/tile.h"
 #include "model/unit.h"
 #include "model/city.h"
 #include "raylib.h"
-
-using namespace Layout;
 
 // ---------------------------------------------------------------------------
 // Local helpers — only used by InformationView
@@ -63,15 +62,16 @@ InformationView::InformationView() {}
 
 void InformationView::render(const World& world,
                              const Position* hoverPos,
-                             const Position* selectedPos) const {
-    const int PX  = GRID_RIGHT + 4;
-    const int PW  = 1916 - PX;
+                             const Position* selectedPos,
+                             int panelX, int panelW, int screenH) const {
+    const int PX  = panelX;
+    const int PW  = panelW;
     const int PAD = 14;
     const int cx  = PX + PAD;
-    const int cw  = PW - PAD * 2;
+    const int cw  = std::max(40, PW - PAD * 2);
 
-    DrawRectangle(PX, 0, PW, 1080, Color{20, 20, 32, 255});
-    DrawLine(PX, 0, PX, 1080, Color{55, 55, 75, 255});
+    DrawRectangle(PX, 0, PW, screenH, Color{20, 20, 32, 255});
+    DrawLine(PX, 0, PX, screenH, Color{55, 55, 75, 255});
 
     int y = 70;
 
