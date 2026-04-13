@@ -73,9 +73,9 @@ public:
     /** Always returns nullopt — BUILDING mode does not use a pending ControllerAction. */
     std::optional<ControllerAction> getPendingAction() const override { return std::nullopt; }
 
-    /** Returns the constructable building types. */
+    /** Returns all constructable building types. */
     std::vector<std::string> getActionLabels() const override {
-        return {"Foundry", "Barrack"};
+        return {"Foundry", "Barrack", "Extractor", "Shrine", "Utility"};
     }
 
 private:
@@ -84,16 +84,5 @@ private:
 
     std::optional<Position> selection;
 
-    /**
-     * Phase 1: records the target construction tile.
-     *
-     * Does not validate ownership or legality here — that is deferred to the
-     * model when the construction request is eventually dispatched.
-     *
-     * @param pos  The tile selected for construction.
-     * @return     Always nullopt.
-     *
-     * State: selection = pos.
-     */
     std::optional<PlayerError> selectOrigin(Position pos);
 };

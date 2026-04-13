@@ -123,12 +123,22 @@ void GUI::render(const World& world,
         BeginScissorMode(LEFT_UI_RESERVE, TITLE_TOP_MARGIN, playW, playH);
         BeginMode2D(cam);
 
-        // Compute fog-of-war visible tiles for the current player
+        // Fog-of-war visible tiles for the current player
         std::unordered_set<Position> visibleTiles;
         if (Debug::fogEnabled) {
             visibleTiles = world.getVisiblePositions(world.getCurrentPlayer().getId());
         }
-        gridView->render(frameLayout_, world, &hoverPos, selectedPos, reachable, attackable, lethal, path, visibleTiles);
+
+        // Buildable tiles (shown only in BUILDING mode)
+        std::unordered_set<Position> buildableTiles;
+        if (currentMode == ControllerMode::BUILDING) {
+            auto bvec = world.getBuildableTiles(world.getCurrentPlayer().getId());
+            buildableTiles.insert(bvec.begin(), bvec.end());
+        }
+
+        gridView->render(frameLayout_, world, &hoverPos, selectedPos,
+                         reachable, attackable, lethal, path,
+                         visibleTiles, buildableTiles);
 
         damageIndicators.update(GetFrameTime());
         damageIndicators.render();

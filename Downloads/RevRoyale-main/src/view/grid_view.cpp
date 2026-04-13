@@ -69,7 +69,8 @@ void GridView::render(const Layout::ViewLayout& layout,
                       const std::vector<Position>& attackable,
                       const std::vector<Position>& lethal,
                       const std::vector<Position>& path,
-                      const std::unordered_set<Position>& visibleTiles)
+                      const std::unordered_set<Position>& visibleTiles,
+                      const std::unordered_set<Position>& buildableTiles)
 {
     gridOrigX_ = layout.gridOrigX;
     gridOrigY_ = layout.gridOrigY;
@@ -86,14 +87,16 @@ void GridView::render(const Layout::ViewLayout& layout,
             int col = sum - row;
             if (col < 0 || col >= Game::WIDTH) continue;
             Position pos(row, col);
-            bool isFogged = fogActive && (visibleTiles.count(pos) == 0);
+            bool isFogged    = fogActive && (visibleTiles.count(pos) == 0);
+            bool isBuildable = buildableTiles.count(pos) > 0;
             renderCell(world, pos,
                        hoverPos    && pos == *hoverPos,
                        selectedPos && pos == *selectedPos,
                        reachableSet.count(pos) > 0,
                        attackableSet.count(pos) > 0,
                        lethalSet.count(pos) > 0,
-                       isFogged);
+                       isFogged,
+                       isBuildable);
         }
     }
 
@@ -113,6 +116,47 @@ void GridView::isoTopVertex(int row, int col, int& px, int& py) const {
 void GridView::renderTerrainLayer(const Tile& tile, int px, int py) {
     // Texture path not yet adapted for iso diamond rendering — always procedural.
     Sprites::terrain(tile.getTerrain(), px, py);
+}
+
+void GridView::renderCityBorderLayer(const World& world, const Position& pos, int px, int py) {
+    // Only draw on border tiles, not on city center tiles (which have the city icon).
+    if (world.hasCityAt(pos)) return;
+    const City* city = world.getCityForTile(pos);
+    if (!city) return;
+
+    Color fc = city->hasOwner()
+        ? playerColor(city->getOwner().getId())
+        : Color{160, 160, 160, 255};
+
+    Vector2 top = {(float)px,              (float)py};
+    Vector2 rt  = {(float)(px+ISO_HALF_W), (float)(py+ISO_HALF_H)};
+    Vector2 bot = {(float)px,              (float)(py+ISO_TILE_H)};
+    Vector2 lt  = {(float)(px-ISO_HALF_W), (float)(py+ISO_HALF_H)};
+
+    // Subtle tint matching the owning player's colour
+    DrawTriangle(top, lt, bot, Color{fc.r, fc.g, fc.b, 28});
+    DrawTriangle(top, bot, rt, Color{fc.r, fc.g, fc.b, 28});
+    // Faint border
+    DrawLineEx(top, rt,  1.0f, Color{fc.r, fc.g, fc.b, 55});
+    DrawLineEx(rt,  bot, 1.0f, Color{fc.r, fc.g, fc.b, 55});
+    DrawLineEx(bot, lt,  1.0f, Color{fc.r, fc.g, fc.b, 55});
+    DrawLineEx(lt,  top, 1.0f, Color{fc.r, fc.g, fc.b, 55});
+}
+
+void GridView::renderBuildableTileLayer(int px, int py) {
+    Vector2 top = {(float)px,              (float)py};
+    Vector2 rt  = {(float)(px+ISO_HALF_W), (float)(py+ISO_HALF_H)};
+    Vector2 bot = {(float)px,              (float)(py+ISO_TILE_H)};
+    Vector2 lt  = {(float)(px-ISO_HALF_W), (float)(py+ISO_HALF_H)};
+
+    float pulse = 0.5f + 0.5f * sinf((float)GetTime() * 2.5f);
+    unsigned char fa = (unsigned char)(30 + 30 * pulse);
+    DrawTriangle(top, lt, bot, Color{60, 200, 80, fa});
+    DrawTriangle(top, bot, rt, Color{60, 200, 80, fa});
+    DrawLineEx(top, rt,  1.5f, Color{80, 220, 100, 160});
+    DrawLineEx(rt,  bot, 1.5f, Color{80, 220, 100, 160});
+    DrawLineEx(bot, lt,  1.5f, Color{80, 220, 100, 160});
+    DrawLineEx(lt,  top, 1.5f, Color{80, 220, 100, 160});
 }
 
 void GridView::renderCityLayer(const Tile& tile, int px, int py) {
@@ -498,41 +542,27 @@ void GridView::renderAttackableHoverLayer(int px, int py) {
 }
 
 void GridView::renderBuildingLayer(const World& world, const Position& pos, int px, int py) {
-    const Tile* tile = &world.getTileAt(pos);
-    if (!tile->hasCity()) return;
+    const Tile& tile = world.getTileAt(pos);
 
-    const City* city = tile->getCity();
-    Color faction = city->hasOwner()
+    // Determine faction colour from the city that owns this tile (or neutral grey).
+    const City* city = world.getCityForTile(pos);
+    Color faction = (city && city->hasOwner())
         ? playerColor(city->getOwner().getId())
         : Color{160, 160, 160, 255};
 
-    static const BuildingType DRAWABLE[] = { BuildingType::BARRACK, BuildingType::FOUNDRY };
-    std::vector<BuildingType> present;
-    for (BuildingType bt : DRAWABLE) {
-        int count = city->countBuildings(bt);
-        for (int i = 0; i < count; ++i) present.push_back(bt);
+    // Completed building on this tile.
+    if (tile.hasTileBuilding()) {
+        Sprites::building(*tile.getTileBuilding(), px, py, faction, 0, 1);
     }
 
-    bool hasScaffold = false;
-    BuildingType scaffoldType = BuildingType::BARRACK;
-    int scaffoldTurns = 0;
+    // In-progress construction scaffold.
     for (const auto& entry : world.getConstructionQueue()) {
         if (entry.pos == pos) {
-            hasScaffold   = true;
-            scaffoldType  = entry.type;
-            scaffoldTurns = entry.turnsRemaining;
+            int offset = tile.hasTileBuilding() ? 1 : 0;
+            Sprites::buildingScaffold(entry.type, px, py, entry.turnsRemaining, offset, offset + 1);
             break;
         }
     }
-
-    const int total = (int)present.size() + (hasScaffold ? 1 : 0);
-    if (total == 0) return;
-
-    for (int i = 0; i < (int)present.size(); ++i)
-        Sprites::building(present[i], px, py, faction, i, total);
-
-    if (hasScaffold)
-        Sprites::buildingScaffold(scaffoldType, px, py, scaffoldTurns, (int)present.size(), total);
 }
 
 void GridView::drawFogOverlay(int px, int py) {
@@ -553,7 +583,7 @@ void GridView::drawFogOverlay(int px, int py) {
 }
 
 void GridView::renderCell(const World& world, const Position& pos,
-                          bool isHovered, bool isSelected, bool isReachable, bool isAttackable, bool isLethal, bool isFogged) {
+                          bool isHovered, bool isSelected, bool isReachable, bool isAttackable, bool isLethal, bool isFogged, bool isBuildable) {
     int px, py;
     isoTopVertex(pos.row(), pos.col(), px, py);
     const Tile& tile = world.getTileAt(pos);
@@ -570,8 +600,10 @@ void GridView::renderCell(const World& world, const Position& pos,
     }
 
     // ── Tile-level layers (bottom → top, all drawn before the unit) ──────────
+    renderCityBorderLayer(world, pos, px, py);
     renderCityLayer(tile, px, py);
     renderBuildingLayer(world, pos, px, py);
+    if (isBuildable)                       renderBuildableTileLayer(px, py);
     if (isReachable)                       renderReachableLayer(px, py, isHovered);
     if (isAttackable)                      renderAttackableLayer(px, py);
     if (isAttackable && isHovered && !isLethal) renderAttackableRingsLayer(px, py);

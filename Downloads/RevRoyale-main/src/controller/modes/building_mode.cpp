@@ -9,20 +9,33 @@ std::optional<PlayerError> BuildingMode::onTileSelect(Position pos) {
     return selectOrigin(pos);
 }
 
-// Phase 1: choose a tile to build on (world validates ownership/legality).
+// Phase 1: choose a border tile to build on.
+// Validates that the tile is in a city border owned by this player.
 std::optional<PlayerError> BuildingMode::selectOrigin(Position pos) {
+    // City center tiles are for training, not building placement.
+    if (world.hasCityAt(pos)) return PlayerError::INVALIDTARGET;
+
+    const City* city = world.getCityForTile(pos);
+    if (!city) return PlayerError::INVALIDTARGET;
+    if (!city->hasOwner() || city->getOwner().getId() != player.getId())
+        return PlayerError::INVALIDTARGET;
+
     selection = pos;
     return std::nullopt;
 }
 
-// Phase 2 (button): choose a building type to construct at the selected city.
+// Phase 2 (button): choose a building type to construct at the selected tile.
 std::optional<PlayerError> BuildingMode::onActionButton(int index) {
     if (!selection.has_value()) return PlayerError::INVALIDTARGET;
 
     static const BuildingType types[] = {
-        BuildingType::FOUNDRY, BuildingType::BARRACK
+        BuildingType::FOUNDRY,
+        BuildingType::BARRACK,
+        BuildingType::EXTRACTOR,
+        BuildingType::SHRINE,
+        BuildingType::UTILITY,
     };
-    if (index < 0 || index >= 2) return PlayerError::NOTSUPPORTED;
+    if (index < 0 || index >= 5) return PlayerError::NOTSUPPORTED;
 
     auto result = world.issueConstructCommand(*selection, types[index], player);
     if (!result.has_value()) {

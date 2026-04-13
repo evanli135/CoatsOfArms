@@ -23,7 +23,8 @@ enum class GamePhase {
 
 /** One building currently under construction. Stored in World::constructionQueue. */
 struct ConstructionEntry {
-    Position     pos;
+    Position     pos;        // target border tile where the building will be placed
+    Position     cityPos;    // the city this construction belongs to
     BuildingType type;
     int          turnsRemaining;
     int          ownerPlayerId;
@@ -138,8 +139,6 @@ public:
     void moveUnit(const Position& from, const Position& to);
     void battle(const Position& attackerPos, const Position& defenderPos);
 
-    void addToConstructionQueue(const Position& pos, BuildingType buildingType);
-
     std::optional<PlayerError> applyControllerRequest(ControllerRequest action);
 
     void notifyObservers(const ModelEvent& event);
@@ -176,26 +175,40 @@ public:
         return trainingSystem.countUnitsForPlayer(playerId);
     }
 
-    /** Validates ownership/resources and adds a building to the construction queue. Called by ConstructCommand. */
-    std::optional<PlayerError> scheduleConstruction(const Position& pos, BuildingType type, const Player& player);
-
-    /** Removes a queued entry and refunds its resource cost. Called by ConstructCommand::undo. */
-    void cancelScheduledConstruction(const Position& pos, BuildingType type, const Player& player);
+    /** Validates ownership and available metal capacity, then queues the building.
+     *  tilePos must be a border tile of a city owned by player (not the city center itself). */
+    std::optional<PlayerError> scheduleConstruction(const Position& tilePos, BuildingType type, const Player& player);
 
     /** Create and execute a ConstructCommand, adding it to history on success. */
-    std::optional<PlayerError> issueConstructCommand(const Position& pos, BuildingType type, const Player& player);
-
-    /** Returns the current resource counts for the given player. */
-    const std::map<ResourceType, int>& getPlayerResources(int playerId) const;
+    std::optional<PlayerError> issueConstructCommand(const Position& tilePos, BuildingType type, const Player& player);
 
     /** Returns the active construction queue (all players). */
     const std::vector<ConstructionEntry>& getConstructionQueue() const { return constructionQueue; }
 
-    /** Refunds the resource cost of a training action. Called by TrainCommand::undo. */
-    void refundTrainingCost(UnitType type, const Player& player);
+    // ── Capacity economy ──────────────────────────────────────────────────
+    /** Total food/metal provided by all cities owned by playerId. */
+    int getTotalCapacity(int playerId, ResourceType rt) const;
+    /** Food/metal currently consumed by living units, in-training units,
+     *  completed buildings, and in-progress construction for playerId. */
+    int getUsedCapacity(int playerId, ResourceType rt) const;
+    /** Available = total - used. May be negative if capacity was lost mid-game. */
+    int getAvailableCapacity(int playerId, ResourceType rt) const;
 
-    /** Refunds the resource cost of a construction action. Called by ConstructCommand::undo. */
-    void refundConstructionCost(BuildingType type, const Player& player);
+    // ── Border / territory queries ─────────────────────────────────────────
+    /** All tiles within Chebyshev distance borderRadius of cityPos, excluding cityPos itself. */
+    std::unordered_set<Position> getCityBorderTiles(Position cityPos) const;
+    /** The city whose territory contains pos (center or border), or nullptr. */
+    const City* getCityForTile(Position pos) const;
+    /** Position of the city center whose territory contains pos.
+     *  Returns {-1,-1} if pos is not in any city's territory. */
+    Position getCityPosForTile(Position pos) const;
+
+    // ── Building queries (replaces city.countBuildings) ────────────────────
+    int  countBuildingsInCity(Position cityPos, BuildingType type) const;
+    bool cityHasBuilding(Position cityPos, BuildingType type) const;
+
+    /** All border tiles owned by playerId that don't yet have a building. */
+    std::vector<Position> getBuildableTiles(int playerId) const;
 
     void startGame();
 
@@ -266,7 +279,6 @@ private:
     /** Hit chance (25–95%) for attacker vs defender based on precision/agility. */
     static int calcHitChance(const Unit& attacker, const Unit& defender);
 
-    std::unordered_map<int, std::map<ResourceType, int>> playerResources;
     std::vector<ConstructionEntry> constructionQueue;
 };
 

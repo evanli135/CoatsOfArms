@@ -4,6 +4,7 @@
 #include "model/tile.h"
 #include "model/unit.h"
 #include "model/city.h"
+#include "model/economy.h"
 #include "model/world.h"
 #include "raylib.h"
 
@@ -210,10 +211,37 @@ static void renderCitySection(int cx, int cw, int& y,
     if (city->hasOwner()) {
         DrawText(TextFormat("Owner: Player %d", city->getOwner().getId() + 1),
                  cx, y, 14, playerColor(city->getOwner().getId()));
+        y += 22;
+
+        // Capacity bars
+        int pid = city->getOwner().getId();
+        int foodAvail = world.getAvailableCapacity(pid, ResourceType::FOOD);
+        int foodTotal = world.getTotalCapacity(pid, ResourceType::FOOD);
+        int metalAvail = world.getAvailableCapacity(pid, ResourceType::METAL);
+        int metalTotal = world.getTotalCapacity(pid, ResourceType::METAL);
+
+        auto drawCapBar = [&](const char* label, int avail, int total, Color col) {
+            DrawText(label, cx, y, 11, Color{140, 140, 160, 255});
+            const char* valStr = TextFormat("%d / %d", total - avail, total);
+            DrawText(valStr, cx + cw - MeasureText(valStr, 11) - 2, y, 11, col);
+            y += 14;
+            int barW = cw;
+            float fill = (total > 0) ? (float)(total - avail) / total : 0.f;
+            fill = fill < 0.f ? 0.f : (fill > 1.f ? 1.f : fill);
+            DrawRectangle(cx, y, barW, 5, Color{35, 35, 50, 255});
+            DrawRectangle(cx, y, (int)(barW * fill), 5, col);
+            DrawRectangleLines(cx, y, barW, 5, Color{55, 55, 75, 255});
+            y += 10;
+        };
+        drawCapBar("FOOD  used", foodAvail, foodTotal,
+                   foodAvail > 0 ? Color{100, 220, 80, 255} : Color{220, 80, 80, 255});
+        drawCapBar("METAL used", metalAvail, metalTotal,
+                   metalAvail > 0 ? Color{100, 160, 255, 255} : Color{220, 80, 80, 255});
+        y += 4;
     } else {
         DrawText("Unclaimed", cx, y, 14, Color{140, 140, 160, 255});
+        y += 22;
     }
-    y += 22;
 
     if (city->isTraining()) {
         const TrainingSlot* slot = city->getTrainingSlot();

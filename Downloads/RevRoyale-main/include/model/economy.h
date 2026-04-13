@@ -51,6 +51,17 @@ namespace std {
     };
 }
 
+// ---------------------------------------------------------------------------
+// Static capacity helpers — used by World to compute available resources.
+// ---------------------------------------------------------------------------
+
+// Food/metal produced per turn by a single owned city.
+inline int cityCapacity(ResourceType rt) {
+    if (rt == ResourceType::FOOD)  return 10;
+    if (rt == ResourceType::METAL) return 5;
+    return 0;
+}
+
 class BuildingFactory {
 public:
     static Building createBuilding(BuildingType type) {

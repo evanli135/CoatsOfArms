@@ -84,9 +84,17 @@ public:
         return u;
     }
 
+    bool hasTileBuilding() const { return tileBuilding.has_value(); }
+
+    const std::optional<BuildingType>& getTileBuilding() const { return tileBuilding; }
+
+    void setTileBuilding(BuildingType type) { tileBuilding = type; }
+
+    void clearTileBuilding() { tileBuilding.reset(); }
+
 private:
     Terrain terrain;
     std::optional<UnitId> unit;
-    std::unordered_map<BuildingType, bool> buildings;
+    std::optional<BuildingType> tileBuilding;
     std::optional<City> city;
 };

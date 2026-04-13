@@ -28,38 +28,9 @@ struct TrainingSlot {
 
 class City {
 public:
-    City(const string& name, int buildingCapacity)
-        : name(name), buildingCapacity(buildingCapacity),
-          upgradeLevel(0), level(0),
+    City(const string& name)
+        : name(name), borderRadius(2), upgradeLevel(0), level(0),
           owner(&Player::null()) {}
-
-    void addBuilding(BuildingType type) {
-        if (buildings.size() >= (size_t)buildingCapacity)
-            throw std::logic_error("City has reached building capacity");
-        buildings[type]++;
-    }
-
-    bool hasBuilding(BuildingType type) const {
-        auto it = buildings.find(type);
-        return it != buildings.end() && it->second > 0;
-    }
-
-    int countBuildings(BuildingType type) const {
-        auto it = buildings.find(type);
-        return it != buildings.end() ? it->second : 0;
-    }
-
-    const unordered_map<BuildingType, int>& getBuildings() const {
-        return buildings;
-    }
-
-    void cancelConstruction(BuildingType type) {
-        auto it = buildings.find(type);
-        if (it != buildings.end() && it->second > 0)
-            it->second--;
-        else
-            throw std::logic_error("No such building under construction");
-    }
 
     bool          hasOwner()   const { return !owner->isNull(); }
     const Player& getOwner()   const { return *owner; }
@@ -73,7 +44,8 @@ public:
         upgradeLevel++;
     }
 
-    const string& getName() const { return name; }
+    const string& getName()      const { return name; }
+    int           getBorderRadius() const { return borderRadius; }
 
     // ── Training slot ──────────────────────────────────────────────────────
     bool isTraining() const { return trainingSlot.has_value(); }
@@ -101,9 +73,8 @@ public:
 private:
     string name;
     std::optional<TrainingSlot> trainingSlot;
-    unordered_map<BuildingType, int> buildings;
     const Player* owner;
-    int buildingCapacity;
+    int borderRadius;
     int upgradeLevel;
     int level;
 };

@@ -21,29 +21,31 @@ int getDistance(const Position& from, const Position& to) {
 }
 
 // ---------------------------------------------------------------------------
-// File-local resource cost tables
+// File-local capacity cost tables (resource is consumed by existence, not purchase)
 // ---------------------------------------------------------------------------
 
-static const std::map<ResourceType, int>& trainCost(UnitType type) {
-    static const std::map<ResourceType, int> costs[] = {
-        {{ResourceType::FOOD, 2}},                            // WARRIOR
-        {{ResourceType::FOOD, 1}},                            // SCOUT
-        {{ResourceType::FOOD, 2}, {ResourceType::METAL, 1}},  // RANGER
-        {{ResourceType::FOOD, 3}},                            // CAVALRY
-        {{ResourceType::FOOD, 2}, {ResourceType::METAL, 2}},  // MAGE
-    };
-    return costs[static_cast<int>(type)];
+// Food capacity permanently consumed by one living unit of this type.
+static int unitFoodCost(UnitType type) {
+    switch (type) {
+        case UnitType::WARRIOR: return 2;
+        case UnitType::SCOUT:   return 1;
+        case UnitType::RANGER:  return 2;
+        case UnitType::CAVALRY: return 3;
+        case UnitType::MAGE:    return 2;
+    }
+    return 0;
 }
 
-static const std::map<ResourceType, int>& buildCost(BuildingType type) {
-    static const std::map<ResourceType, int> costs[] = {
-        {{ResourceType::FOOD, 2}, {ResourceType::METAL, 3}},  // FOUNDRY
-        {{ResourceType::FOOD, 3}, {ResourceType::METAL, 2}},  // BARRACK
-        {{ResourceType::FOOD, 1}, {ResourceType::METAL, 1}},  // EXTRACTOR
-        {{ResourceType::FOOD, 1}, {ResourceType::METAL, 1}},  // SHRINE
-        {{ResourceType::FOOD, 1}, {ResourceType::METAL, 1}},  // UTILITY
-    };
-    return costs[static_cast<int>(type)];
+// Metal capacity permanently consumed by one placed building of this type.
+static int buildingMetalCost(BuildingType type) {
+    switch (type) {
+        case BuildingType::FOUNDRY:   return 2;
+        case BuildingType::BARRACK:   return 2;
+        case BuildingType::EXTRACTOR: return 1;
+        case BuildingType::SHRINE:    return 1;
+        case BuildingType::UTILITY:   return 1;
+    }
+    return 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -64,14 +66,6 @@ World::World(std::vector<Player> players)
     if (players.size() < 2) {
         throw std::logic_error("Not enough players\n");
     }
-
-    // Initialise each player's resource pool.
-    for (const auto& p : players) {
-        playerResources[p.getId()] = {
-            {ResourceType::FOOD,  10},
-            {ResourceType::METAL,  5}
-        };
-    }
 }
 
 World::World(World&& other) noexcept
@@ -84,7 +78,6 @@ World::World(World&& other) noexcept
       turn(other.turn),
       observers(std::move(other.observers)),
       commandHistory(std::move(other.commandHistory)),
-      playerResources(std::move(other.playerResources)),
       constructionQueue(std::move(other.constructionQueue)),
       battleSystem(*this),
       movementSystem(*this),
@@ -150,40 +143,15 @@ void World::nextTurn() {
     // ── Training: tick queues and spawn completed units ──────────────────────
     trainingSystem.advanceTraining(currentPlayerId);
 
-    // ── Economy and construction for the new current player ─────────────────
-
-    // 1. Tick construction queue: decrement turns, complete finished buildings.
+    // ── Construction: tick queues, place completed buildings on their tiles ─
     for (auto it = constructionQueue.begin(); it != constructionQueue.end(); ) {
         if (it->ownerPlayerId != currentPlayerId) { ++it; continue; }
         it->turnsRemaining--;
         if (it->turnsRemaining <= 0) {
-            if (City* city = getTileAt(it->pos).getCityMutable()) {
-                city->addBuilding(it->type);
-                std::cout << "Construction complete: building finished at ("
-                          << it->pos.row() << "," << it->pos.col() << ")\n";
-            }
+            getTileAt(it->pos).setTileBuilding(it->type);
             it = constructionQueue.erase(it);
         } else {
             ++it;
-        }
-    }
-
-    // 2. Resource income: +3 FOOD and +1 METAL per owned city.
-    auto& res = playerResources[currentPlayerId];
-    for (const auto& cpos : cityPositions) {
-        const City* city = getCityAt(cpos);
-        if (city && city->hasOwner() && city->getOwner().getId() == currentPlayerId) {
-            res[ResourceType::FOOD]  += 3;
-            res[ResourceType::METAL] += 1;
-        }
-    }
-
-    // 3. Unit maintenance: -1 FOOD per unit (Cavalry costs 2).
-    for (const auto& [id, unit] : units) {
-        if (unit->getOwner().getId() != currentPlayerId) continue;
-        int maint = (unit->getType() == UnitType::CAVALRY) ? 2 : 1;
-        if (res[ResourceType::FOOD] >= maint) {
-            res[ResourceType::FOOD] -= maint;
         }
     }
 
@@ -401,20 +369,13 @@ std::optional<PlayerError> World::trainUnit(const Position& cityPos, UnitType ty
     // Barracks required to train units.
     const City* city = getCityAt(cityPos);
     if (!city) return PlayerError::INVALIDTARGET;
-    if (!city->hasBuilding(BuildingType::BARRACK))
+    if (!cityHasBuilding(cityPos, BuildingType::BARRACK))
         return PlayerError::INVALIDTARGET;
 
-    // Check and deduct training resources.
-    const auto& cost = trainCost(type);
-    auto& res = playerResources[player.getId()];
-    for (const auto& [rtype, amount] : cost) {
-        auto it = res.find(rtype);
-        if (it == res.end() || it->second < amount)
-            return PlayerError::INSUFFICIENTRESOURCES;
-    }
-    for (const auto& [rtype, amount] : cost) {
-        res[rtype] -= amount;
-    }
+    // Check food capacity — the unit will permanently consume this capacity.
+    int cost = unitFoodCost(type);
+    if (getAvailableCapacity(player.getId(), ResourceType::FOOD) < cost)
+        return PlayerError::INSUFFICIENTRESOURCES;
 
     return trainingSystem.beginTraining(cityPos, type, player);
 }
@@ -446,54 +407,40 @@ void World::addUnit(const Position& pos, Unit unit) {
 // Construction system
 // ---------------------------------------------------------------------------
 
-std::optional<PlayerError> World::scheduleConstruction(const Position& pos, BuildingType type, const Player& player) {
-    if (!hasCityAt(pos)) return PlayerError::INVALIDTARGET;
-    const City* city = getCityAt(pos);
+std::optional<PlayerError> World::scheduleConstruction(const Position& tilePos, BuildingType type, const Player& player) {
+    // Tile must be in a city's border (not the city center itself).
+    if (hasCityAt(tilePos)) return PlayerError::INVALIDTARGET;
+    const City* city = getCityForTile(tilePos);
+    if (!city) return PlayerError::INVALIDTARGET;
     if (!city->hasOwner() || city->getOwner().getId() != player.getId())
         return PlayerError::INVALIDTARGET;
 
-    // Only one building may be under construction at a given city at a time.
+    // Can't build on an occupied tile (unit present or building already there).
+    if (getTileAt(tilePos).hasTileBuilding()) return PlayerError::INVALIDTARGET;
+    if (getTileAt(tilePos).hasUnit())         return PlayerError::INVALIDTARGET;
+    if (getTileAt(tilePos).getTerrain() == Terrain::OCEAN) return PlayerError::INVALIDTARGET;
+
+    // Only one construction per tile at a time.
     for (const auto& entry : constructionQueue) {
-        if (entry.pos == pos) return PlayerError::INVALIDTARGET;
+        if (entry.pos == tilePos) return PlayerError::INVALIDTARGET;
     }
 
-    // Check and deduct resources.
-    const auto& cost = buildCost(type);
-    auto& res = playerResources[player.getId()];
-    for (const auto& [rtype, amount] : cost) {
-        auto it = res.find(rtype);
-        if (it == res.end() || it->second < amount)
-            return PlayerError::INSUFFICIENTRESOURCES;
-    }
-    for (const auto& [rtype, amount] : cost) {
-        res[rtype] -= amount;
-    }
+    // Check available metal capacity (in-progress construction already counts).
+    int cost = buildingMetalCost(type);
+    if (getAvailableCapacity(player.getId(), ResourceType::METAL) < cost)
+        return PlayerError::INSUFFICIENTRESOURCES;
 
-    // Base 2 turns, -1 per foundry already built (min 1).
-    int turns = 2 - city->countBuildings(BuildingType::FOUNDRY);
+    // Base 2 turns, -1 per foundry already in this city (min 1).
+    Position cpos = getCityPosForTile(tilePos);
+    int turns = 2 - countBuildingsInCity(cpos, BuildingType::FOUNDRY);
     turns = std::max(1, turns);
 
-    constructionQueue.push_back({pos, type, turns, player.getId()});
+    constructionQueue.push_back({tilePos, cpos, type, turns, player.getId()});
     return std::nullopt;
 }
 
-void World::cancelScheduledConstruction(const Position& pos, BuildingType type, const Player& player) {
-    for (auto it = constructionQueue.begin(); it != constructionQueue.end(); ++it) {
-        if (it->pos == pos && it->type == type && it->ownerPlayerId == player.getId()) {
-            // Refund resources.
-            const auto& cost = buildCost(type);
-            auto& res = playerResources[player.getId()];
-            for (const auto& [rtype, amount] : cost) {
-                res[rtype] += amount;
-            }
-            constructionQueue.erase(it);
-            return;
-        }
-    }
-}
-
-std::optional<PlayerError> World::issueConstructCommand(const Position& pos, BuildingType type, const Player& player) {
-    auto cmd = std::make_unique<ConstructCommand>(pos, type, player);
+std::optional<PlayerError> World::issueConstructCommand(const Position& tilePos, BuildingType type, const Player& player) {
+    auto cmd = std::make_unique<ConstructCommand>(tilePos, type, player);
     auto result = cmd->execute(*this);
     if (!result.has_value()) {
         commandHistory.push_back(std::move(cmd));
@@ -502,29 +449,141 @@ std::optional<PlayerError> World::issueConstructCommand(const Position& pos, Bui
 }
 
 // ---------------------------------------------------------------------------
-// Resource helpers
+// Capacity economy
 // ---------------------------------------------------------------------------
 
-const std::map<ResourceType, int>& World::getPlayerResources(int playerId) const {
-    static const std::map<ResourceType, int> empty;
-    auto it = playerResources.find(playerId);
-    return it != playerResources.end() ? it->second : empty;
+int World::getTotalCapacity(int playerId, ResourceType rt) const {
+    int total = 0;
+    for (const auto& cpos : cityPositions) {
+        const City* city = getCityAt(cpos);
+        if (city && city->hasOwner() && city->getOwner().getId() == playerId)
+            total += cityCapacity(rt);
+    }
+    return total;
 }
 
-void World::refundTrainingCost(UnitType type, const Player& player) {
-    const auto& cost = trainCost(type);
-    auto& res = playerResources[player.getId()];
-    for (const auto& [rtype, amount] : cost) {
-        res[rtype] += amount;
+int World::getUsedCapacity(int playerId, ResourceType rt) const {
+    int used = 0;
+    if (rt == ResourceType::FOOD) {
+        // Living units
+        for (const auto& [id, unit] : units) {
+            if (unit->getOwner().getId() == playerId)
+                used += unitFoodCost(unit->getType());
+        }
+        // Units currently in training (capacity reserved while queued)
+        for (const auto& cpos : cityPositions) {
+            const City* city = getCityAt(cpos);
+            if (!city) continue;
+            if (city->isTraining()) {
+                const TrainingSlot* slot = city->getTrainingSlot();
+                if (slot && slot->ownerId == playerId)
+                    used += unitFoodCost(slot->unitType);
+            }
+        }
+    } else if (rt == ResourceType::METAL) {
+        // Completed buildings on border tiles of owned cities
+        for (const auto& cpos : cityPositions) {
+            const City* city = getCityAt(cpos);
+            if (!city || !city->hasOwner() || city->getOwner().getId() != playerId)
+                continue;
+            for (const auto& bpos : getCityBorderTiles(cpos)) {
+                const Tile& t = getTileAt(bpos);
+                if (t.hasTileBuilding())
+                    used += buildingMetalCost(*t.getTileBuilding());
+            }
+        }
+        // In-progress construction entries (capacity reserved immediately on queue)
+        for (const auto& entry : constructionQueue) {
+            if (entry.ownerPlayerId == playerId)
+                used += buildingMetalCost(entry.type);
+        }
     }
+    return used;
 }
 
-void World::refundConstructionCost(BuildingType type, const Player& player) {
-    const auto& cost = buildCost(type);
-    auto& res = playerResources[player.getId()];
-    for (const auto& [rtype, amount] : cost) {
-        res[rtype] += amount;
+int World::getAvailableCapacity(int playerId, ResourceType rt) const {
+    return getTotalCapacity(playerId, rt) - getUsedCapacity(playerId, rt);
+}
+
+// ---------------------------------------------------------------------------
+// Border / territory queries
+// ---------------------------------------------------------------------------
+
+std::unordered_set<Position> World::getCityBorderTiles(Position cityPos) const {
+    std::unordered_set<Position> result;
+    const City* city = getCityAt(cityPos);
+    if (!city) return result;
+    int r = city->getBorderRadius();
+    for (int dr = -r; dr <= r; ++dr) {
+        for (int dc = -r; dc <= r; ++dc) {
+            if (dr == 0 && dc == 0) continue;  // exclude city center
+            if (std::max(std::abs(dr), std::abs(dc)) > r) continue;
+            int nr = cityPos.row() + dr, nc = cityPos.col() + dc;
+            if (nr >= 0 && nr < Game::HEIGHT && nc >= 0 && nc < Game::WIDTH)
+                result.insert(Position(nr, nc));
+        }
     }
+    return result;
+}
+
+const City* World::getCityForTile(Position pos) const {
+    for (const auto& cpos : cityPositions) {
+        if (cpos == pos) return getCityAt(cpos);  // city center itself
+        const City* city = getCityAt(cpos);
+        if (!city) continue;
+        int r = city->getBorderRadius();
+        if (std::max(std::abs(pos.row() - cpos.row()),
+                     std::abs(pos.col() - cpos.col())) <= r)
+            return city;
+    }
+    return nullptr;
+}
+
+Position World::getCityPosForTile(Position pos) const {
+    for (const auto& cpos : cityPositions) {
+        if (cpos == pos) return cpos;
+        const City* city = getCityAt(cpos);
+        if (!city) continue;
+        int r = city->getBorderRadius();
+        if (std::max(std::abs(pos.row() - cpos.row()),
+                     std::abs(pos.col() - cpos.col())) <= r)
+            return cpos;
+    }
+    return Position(-1, -1);
+}
+
+int World::countBuildingsInCity(Position cityPos, BuildingType type) const {
+    int count = 0;
+    for (const auto& bpos : getCityBorderTiles(cityPos)) {
+        const Tile& t = getTileAt(bpos);
+        if (t.hasTileBuilding() && *t.getTileBuilding() == type)
+            ++count;
+    }
+    return count;
+}
+
+bool World::cityHasBuilding(Position cityPos, BuildingType type) const {
+    return countBuildingsInCity(cityPos, type) > 0;
+}
+
+std::vector<Position> World::getBuildableTiles(int playerId) const {
+    std::vector<Position> result;
+    for (const auto& cpos : cityPositions) {
+        const City* city = getCityAt(cpos);
+        if (!city || !city->hasOwner() || city->getOwner().getId() != playerId)
+            continue;
+        for (const auto& bpos : getCityBorderTiles(cpos)) {
+            const Tile& t = getTileAt(bpos);
+            if (t.hasTileBuilding()) continue;
+            if (t.getTerrain() == Terrain::OCEAN) continue;
+            // Check no construction already queued for this tile
+            bool queued = false;
+            for (const auto& e : constructionQueue)
+                if (e.pos == bpos) { queued = true; break; }
+            if (!queued) result.push_back(bpos);
+        }
+    }
+    return result;
 }
 
 std::unordered_set<Position> World::getVisiblePositions(int playerId) const {
@@ -550,13 +609,14 @@ std::unordered_set<Position> World::getVisiblePositions(int playerId) const {
         }
     }
 
-    // Each owned city adds 2 tiles of visibility around it.
+    // Each owned city reveals tiles out to its border radius.
     for (const auto& cpos : cityPositions) {
         const City* city = getCityAt(cpos);
         if (!city || !city->hasOwner() || city->getOwner().getId() != playerId) continue;
-        for (int dr = -2; dr <= 2; ++dr) {
-            for (int dc = -2; dc <= 2; ++dc) {
-                if (std::max(std::abs(dr), std::abs(dc)) > 2) continue;
+        int rv = city->getBorderRadius();
+        for (int dr = -rv; dr <= rv; ++dr) {
+            for (int dc = -rv; dc <= rv; ++dc) {
+                if (std::max(std::abs(dr), std::abs(dc)) > rv) continue;
                 int nr = cpos.row() + dr, nc = cpos.col() + dc;
                 if (nr >= 0 && nr < Game::HEIGHT && nc >= 0 && nc < Game::WIDTH)
                     visible.insert(Position(nr, nc));
@@ -565,10 +625,6 @@ std::unordered_set<Position> World::getVisiblePositions(int playerId) const {
     }
 
     return visible;
-}
-
-void World::addToConstructionQueue(const Position& pos, BuildingType buildingType) {
-    constructionQueue.push_back({pos, buildingType, 2, -1});
 }
 
 // ---------------------------------------------------------------------------
@@ -625,16 +681,16 @@ World WorldFactory::create(WorldLayout layout, std::vector<Player> players) {
             world.addUnit(Position(7, 8),  UnitFactory::create(UnitType::RANGER,  players[1]));
             world.addUnit(Position(9, 6),  UnitFactory::create(UnitType::CAVALRY, players[1]));
 
-            // --- Cities (each starts with a Barracks so units can be trained) ---
+            // --- Cities (each starts with a Barracks on an adjacent border tile) ---
             {
-                City p1city("Ironhaven", 4);
-                p1city.addBuilding(BuildingType::BARRACK);
-                world.addCity(Position(1, 11), std::move(p1city), 0);
+                world.addCity(Position(1, 11), City("Ironhaven"), 0);
+                // Starting Barrack on a border tile south of Ironhaven
+                world.getTileAt(Position(2, 11)).setTileBuilding(BuildingType::BARRACK);
             }
             {
-                City p2city("Stonekeep", 4);
-                p2city.addBuilding(BuildingType::BARRACK);
-                world.addCity(Position(12, 2), std::move(p2city), 1);
+                world.addCity(Position(12, 2), City("Stonekeep"), 1);
+                // Starting Barrack on a border tile north of Stonekeep
+                world.getTileAt(Position(11, 2)).setTileBuilding(BuildingType::BARRACK);
             }
             break;
         }

@@ -74,11 +74,10 @@ std::optional<PlayerError> TrainCommand::execute(World& world) {
 
 void TrainCommand::undo(World& world) {
     // Training is queued (no unit has spawned yet), so just cancel the order.
+    // Capacity is freed automatically when the training slot is cleared.
     if (City* city = world.getTileAt(cityPos).getCityMutable()) {
         city->clearTraining();
     }
-    // Refund the resource cost.
-    world.refundTrainingCost(unitType, player);
 }
 
 
@@ -87,9 +86,17 @@ void TrainCommand::undo(World& world) {
 // ---------------------------------------------------------------------------
 
 std::optional<PlayerError> ConstructCommand::execute(World& world) {
-    return world.scheduleConstruction(cityPos, buildingType, player);
+    return world.scheduleConstruction(tilePos, buildingType, player);
 }
 
 void ConstructCommand::undo(World& world) {
-    world.cancelScheduledConstruction(cityPos, buildingType, player);
+    // Remove the construction queue entry; capacity is freed automatically.
+    auto& q = world.constructionQueue;
+    for (auto it = q.begin(); it != q.end(); ++it) {
+        if (it->pos == tilePos && it->type == buildingType
+            && it->ownerPlayerId == player.getId()) {
+            q.erase(it);
+            return;
+        }
+    }
 }

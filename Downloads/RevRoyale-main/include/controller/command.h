@@ -121,14 +121,14 @@ private:
 
 class ConstructCommand : public GameCommand {
 public:
-    ConstructCommand(Position cityPos, BuildingType buildingType, Player player)
-        : cityPos(cityPos), buildingType(buildingType), player(player) {}
+    ConstructCommand(Position tilePos, BuildingType buildingType, Player player)
+        : tilePos(tilePos), buildingType(buildingType), player(player) {}
 
     std::optional<PlayerError> execute(World& world) override;
     void undo(World& world) override;
 
 private:
-    Position     cityPos;
+    Position     tilePos;   // the border tile where the building will be placed
     BuildingType buildingType;
     Player       player;
 };
