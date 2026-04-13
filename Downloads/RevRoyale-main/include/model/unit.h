@@ -71,6 +71,7 @@ struct UnitTemplate {
     int maxHealth;
     int mov;
     int range;
+    int sight; // sight range — tiles visible around the unit
     // Bonus stats
     int str;   // strength   — flat physical attack bonus
     int spc;   // special    — flat non-physical (Mage) attack bonus
@@ -145,6 +146,7 @@ public:
     int             getMaxHealth() const { return tmpl->maxHealth; }
     int             getMovement()   const { return tmpl->mov; }
     int             getRange()      const { return tmpl->range; }
+    int             getSightRange() const { return tmpl->sight; }
     int             getStrength()   const { return tmpl->str;  }
     int             getSpecial()    const { return tmpl->spc;  }
     int             getDefense()    const { return tmpl->def;  }
@@ -256,10 +258,10 @@ public:
 private:
     inline static uint32_t nextId = 0;
 
-    //                                           hp   mov  rng  str  spc  def  res  prec agi  ini  grd
-    static constexpr UnitTemplate WARRIOR_TMPL = { 50,  2,   1,   4,   1,   3,   1,   4,   2,   2,   4 };
-    static constexpr UnitTemplate SCOUT_TMPL   = { 40,  3,   1,   2,   2,   2,   3,   6,   7,   2,   2 };
-    static constexpr UnitTemplate RANGER_TMPL  = { 35,  3,   3,   3,   1,   1,   2,   6,   5,   3,   2 };
-    static constexpr UnitTemplate CAVALRY_TMPL = { 50,  4,   1,   4,   1,   4,   1,   3,   1,   4,   3 };
-    static constexpr UnitTemplate MAGE_TMPL    = { 25,  2,   2,   1,   5,   0,   3,   5,   3,   4,   1 };
+    //                                           hp   mov  rng  sgt  str  spc  def  res  prec agi  ini  grd
+    static constexpr UnitTemplate WARRIOR_TMPL = { 50,  2,   1,   3,   4,   1,   3,   1,   4,   2,   2,   4 };
+    static constexpr UnitTemplate SCOUT_TMPL   = { 40,  3,   1,   5,   2,   2,   2,   3,   6,   7,   2,   2 };
+    static constexpr UnitTemplate RANGER_TMPL  = { 35,  3,   3,   4,   3,   1,   1,   2,   6,   5,   3,   2 };
+    static constexpr UnitTemplate CAVALRY_TMPL = { 50,  4,   1,   3,   4,   1,   4,   1,   3,   1,   4,   3 };
+    static constexpr UnitTemplate MAGE_TMPL    = { 25,  2,   2,   2,   1,   5,   0,   3,   5,   3,   4,   1 };
 };

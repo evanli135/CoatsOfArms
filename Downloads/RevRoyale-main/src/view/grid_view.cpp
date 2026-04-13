@@ -68,13 +68,16 @@ void GridView::render(const Layout::ViewLayout& layout,
                       const std::vector<Position>& reachable,
                       const std::vector<Position>& attackable,
                       const std::vector<Position>& lethal,
-                      const std::vector<Position>& path)
+                      const std::vector<Position>& path,
+                      const std::unordered_set<Position>& visibleTiles)
 {
     gridOrigX_ = layout.gridOrigX;
     gridOrigY_ = layout.gridOrigY;
     std::unordered_set<Position> reachableSet(reachable.begin(), reachable.end());
     std::unordered_set<Position> attackableSet(attackable.begin(), attackable.end());
     std::unordered_set<Position> lethalSet(lethal.begin(), lethal.end());
+
+    const bool fogActive = !visibleTiles.empty();
 
     for (int sum = 0; sum < Game::HEIGHT + Game::WIDTH - 1; ++sum) {
         int rMin = std::max(0, sum - (Game::WIDTH  - 1));
@@ -83,12 +86,14 @@ void GridView::render(const Layout::ViewLayout& layout,
             int col = sum - row;
             if (col < 0 || col >= Game::WIDTH) continue;
             Position pos(row, col);
+            bool isFogged = fogActive && (visibleTiles.count(pos) == 0);
             renderCell(world, pos,
                        hoverPos    && pos == *hoverPos,
                        selectedPos && pos == *selectedPos,
                        reachableSet.count(pos) > 0,
                        attackableSet.count(pos) > 0,
-                       lethalSet.count(pos) > 0);
+                       lethalSet.count(pos) > 0,
+                       isFogged);
         }
     }
 
@@ -530,14 +535,41 @@ void GridView::renderBuildingLayer(const World& world, const Position& pos, int 
         Sprites::buildingScaffold(scaffoldType, px, py, scaffoldTurns, (int)present.size(), total);
 }
 
+void GridView::drawFogOverlay(int px, int py) {
+    Vector2 top = {(float)px,              (float)py};
+    Vector2 rt  = {(float)(px+ISO_HALF_W), (float)(py+ISO_HALF_H)};
+    Vector2 bot = {(float)px,              (float)(py+ISO_TILE_H)};
+    Vector2 lt  = {(float)(px-ISO_HALF_W), (float)(py+ISO_HALF_H)};
+
+    // Dark fog fill — nearly opaque so underlying terrain is barely visible
+    DrawTriangle(top, lt, bot, Color{8, 8, 18, 210});
+    DrawTriangle(top, bot, rt, Color{8, 8, 18, 210});
+
+    // Faint border so fogged tiles still have shape
+    DrawLineEx(top, rt,  1.0f, Color{40, 40, 65, 100});
+    DrawLineEx(rt,  bot, 1.0f, Color{40, 40, 65, 100});
+    DrawLineEx(bot, lt,  1.0f, Color{40, 40, 65, 100});
+    DrawLineEx(lt,  top, 1.0f, Color{40, 40, 65, 100});
+}
+
 void GridView::renderCell(const World& world, const Position& pos,
-                          bool isHovered, bool isSelected, bool isReachable, bool isAttackable, bool isLethal) {
+                          bool isHovered, bool isSelected, bool isReachable, bool isAttackable, bool isLethal, bool isFogged) {
     int px, py;
     isoTopVertex(pos.row(), pos.col(), px, py);
     const Tile& tile = world.getTileAt(pos);
 
-    // ── Tile-level layers (bottom → top, all drawn before the unit) ──────────
+    // Terrain is always drawn so the tile grid remains legible
     renderTerrainLayer(tile, px, py);
+
+    if (isFogged) {
+        // Cover with fog; still show hover/selection so the cursor is always visible
+        drawFogOverlay(px, py);
+        if (isHovered)  renderHoverLayer(px, py);
+        if (isSelected) renderSelectionLayer(px, py);
+        return;
+    }
+
+    // ── Tile-level layers (bottom → top, all drawn before the unit) ──────────
     renderCityLayer(tile, px, py);
     renderBuildingLayer(world, pos, px, py);
     if (isReachable)                       renderReachableLayer(px, py, isHovered);

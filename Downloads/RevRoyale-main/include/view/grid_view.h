@@ -1,5 +1,6 @@
 #pragma once
 #include <optional>
+#include <unordered_set>
 #include "raylib.h"
 #include "model/world.h"
 #include "model/tile.h"
@@ -18,13 +19,15 @@ public:
     GridView();
     ~GridView();
 
-    /** Render the full grid for one frame. */
+    /** Render the full grid for one frame.
+     *  visibleTiles: positions the current player can see. Empty = fog disabled. */
     void render(const Layout::ViewLayout& layout,
                 const World& world, const Position* hoverPos, const Position* selectedPos,
-                const std::vector<Position>& reachable  = {},
-                const std::vector<Position>& attackable = {},
-                const std::vector<Position>& lethal     = {},
-                const std::vector<Position>& path       = {});
+                const std::vector<Position>& reachable    = {},
+                const std::vector<Position>& attackable   = {},
+                const std::vector<Position>& lethal       = {},
+                const std::vector<Position>& path         = {},
+                const std::unordered_set<Position>& visibleTiles = {});
 
     /** Pan the camera by (dpx, dpy) pixels, clamped to map bounds. */
     void scrollBy(int dpx, int dpy);
@@ -60,7 +63,8 @@ private:
     std::optional<Texture2D> terrainSprites[5];  // indexed by (int)Terrain
     std::optional<Texture2D> unitSprites[5];     // indexed by (int)UnitType
 
-    void renderCell(const World& world, const Position& pos, bool isHovered, bool isSelected, bool isReachable, bool isAttackable, bool isLethal);
+    void renderCell(const World& world, const Position& pos, bool isHovered, bool isSelected, bool isReachable, bool isAttackable, bool isLethal, bool isFogged);
+    void drawFogOverlay(int px, int py);
     void renderTerrainLayer(const Tile& tile, int px, int py);
     void renderCityLayer(const Tile& tile, int px, int py);
     void renderBuildingLayer(const World& world, const Position& pos, int px, int py);

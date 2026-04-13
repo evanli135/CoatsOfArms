@@ -3,6 +3,7 @@
 #include <vector>
 #include <memory>
 #include <map>
+#include <unordered_set>
 
 #include "model/spirit.h"
 #include "controller/observer.h"
@@ -197,6 +198,11 @@ public:
     void refundConstructionCost(BuildingType type, const Player& player);
 
     void startGame();
+
+    /** Returns the set of tile positions visible to the given player this turn.
+     *  Each unit contributes a diamond of radius unit.getSightRange().
+     *  Owned cities add 2 tiles of visibility around them. */
+    std::unordered_set<Position> getVisiblePositions(int playerId) const;
 
     /** Returns all tiles the unit at `origin` can legally move to this turn. */
     std::vector<Position> getMovementSnapshot(Position origin) const {

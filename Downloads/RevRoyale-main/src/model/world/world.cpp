@@ -527,6 +527,46 @@ void World::refundConstructionCost(BuildingType type, const Player& player) {
     }
 }
 
+std::unordered_set<Position> World::getVisiblePositions(int playerId) const {
+    std::unordered_set<Position> visible;
+
+    // Each friendly unit reveals a Chebyshev-distance diamond.
+    for (int r = 0; r < Game::HEIGHT; ++r) {
+        for (int c = 0; c < Game::WIDTH; ++c) {
+            const Tile& tile = grid[r][c];
+            if (!tile.hasUnit()) continue;
+            const Unit* unit = getUnitAt(Position(r, c));
+            if (!unit || unit->getOwner().getId() != playerId) continue;
+
+            int sight = unit->getSightRange();
+            for (int dr = -sight; dr <= sight; ++dr) {
+                for (int dc = -sight; dc <= sight; ++dc) {
+                    if (std::max(std::abs(dr), std::abs(dc)) > sight) continue;
+                    int nr = r + dr, nc = c + dc;
+                    if (nr >= 0 && nr < Game::HEIGHT && nc >= 0 && nc < Game::WIDTH)
+                        visible.insert(Position(nr, nc));
+                }
+            }
+        }
+    }
+
+    // Each owned city adds 2 tiles of visibility around it.
+    for (const auto& cpos : cityPositions) {
+        const City* city = getCityAt(cpos);
+        if (!city || !city->hasOwner() || city->getOwner().getId() != playerId) continue;
+        for (int dr = -2; dr <= 2; ++dr) {
+            for (int dc = -2; dc <= 2; ++dc) {
+                if (std::max(std::abs(dr), std::abs(dc)) > 2) continue;
+                int nr = cpos.row() + dr, nc = cpos.col() + dc;
+                if (nr >= 0 && nr < Game::HEIGHT && nc >= 0 && nc < Game::WIDTH)
+                    visible.insert(Position(nr, nc));
+            }
+        }
+    }
+
+    return visible;
+}
+
 void World::addToConstructionQueue(const Position& pos, BuildingType buildingType) {
     constructionQueue.push_back({pos, buildingType, 2, -1});
 }

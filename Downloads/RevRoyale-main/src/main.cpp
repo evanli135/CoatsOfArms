@@ -6,6 +6,7 @@
 #include "controller/error.h"
 #include "controller/mouse.h"
 #include "view/gui.h"
+#include "view/fog.h"
 
 
 int main() {
@@ -82,6 +83,7 @@ int main() {
         if (IsKeyPressed(KEY_THREE)) applyResult(active.onClick(ClickTarget{2}));
         if (IsKeyPressed(KEY_FOUR))  applyResult(active.onClick(ClickTarget{3}));
         if (IsKeyPressed(KEY_Z))     applyResult(active.onUndo());
+        if (IsKeyPressed(KEY_F))     Debug::fogEnabled = !Debug::fogEnabled;
 
         // --- END TURN button ---
         if (view.pollEndTurn())

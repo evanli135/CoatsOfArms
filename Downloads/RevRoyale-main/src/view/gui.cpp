@@ -3,6 +3,7 @@
 #include "view/panel_views.h"
 #include "view/sprites.h"
 #include "view/layout.h"
+#include "view/fog.h"
 #include "model/util.h"
 #include "raylib.h"
 #include <algorithm>
@@ -122,7 +123,12 @@ void GUI::render(const World& world,
         BeginScissorMode(LEFT_UI_RESERVE, TITLE_TOP_MARGIN, playW, playH);
         BeginMode2D(cam);
 
-        gridView->render(frameLayout_, world, &hoverPos, selectedPos, reachable, attackable, lethal, path);
+        // Compute fog-of-war visible tiles for the current player
+        std::unordered_set<Position> visibleTiles;
+        if (Debug::fogEnabled) {
+            visibleTiles = world.getVisiblePositions(world.getCurrentPlayer().getId());
+        }
+        gridView->render(frameLayout_, world, &hoverPos, selectedPos, reachable, attackable, lethal, path, visibleTiles);
 
         damageIndicators.update(GetFrameTime());
         damageIndicators.render();
