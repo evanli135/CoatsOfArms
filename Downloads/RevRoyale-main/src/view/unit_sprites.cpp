@@ -212,6 +212,27 @@ void modeIcon(ControllerMode mode, int ix, int iy, int sz, bool active) {
             DrawTriangle({(float)(tx+tw/2),(float)(ty-4)},{(float)(tx+tw/2),(float)(ty+1)},{(float)(tx+tw/2+5),(float)(ty-2)}, acc);
             break;
         }
+        case ControllerMode::PRAY: {
+            // Hovering orb with diamond outline — spirit energy
+            float r = sz * 0.28f;
+            Color orbCol = active ? Color{190, 150, 255, 230} : Color{130, 100, 180, 180};
+            Color orbHi  = active ? Color{230, 205, 255, 255} : Color{170, 145, 210, 200};
+            // Soft outer ring
+            DrawCircleLines(cx, cy, (int)(r + 2), Color{orbCol.r, orbCol.g, orbCol.b, 80});
+            // Solid orb
+            DrawCircle(cx, cy, (int)r, orbCol);
+            DrawCircle(cx - 2, cy - 2, (int)(r * 0.4f), orbHi);
+            // Diamond radiants
+            DrawLineEx({(float)cx, (float)(cy - (int)(r*1.5f))},
+                        {(float)cx, (float)(cy - (int)r)}, 1.5f, acc);
+            DrawLineEx({(float)cx, (float)(cy + (int)(r*1.5f))},
+                        {(float)cx, (float)(cy + (int)r)}, 1.5f, acc);
+            DrawLineEx({(float)(cx - (int)(r*1.5f)), (float)cy},
+                        {(float)(cx - (int)r), (float)cy}, 1.5f, acc);
+            DrawLineEx({(float)(cx + (int)(r*1.5f)), (float)cy},
+                        {(float)(cx + (int)r), (float)cy}, 1.5f, acc);
+            break;
+        }
     }
 }
 

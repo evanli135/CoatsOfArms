@@ -51,7 +51,8 @@ enum class ControllerAction {
 enum class ControllerMode {
     TACTIC,
     TRAINING,
-    BUILDING
+    BUILDING,
+    PRAY        // shrine interaction — receive spirit boons
 };
 
 /**

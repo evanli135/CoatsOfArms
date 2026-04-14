@@ -5,12 +5,37 @@
 #include "model/unit.h"
 #include "model/city.h"
 #include "model/economy.h"
+#include "model/spirit.h"
 #include "model/world.h"
 #include "raylib.h"
 
 // ---------------------------------------------------------------------------
 // String helpers
 // ---------------------------------------------------------------------------
+
+static const char* buildingName(BuildingType type) {
+    switch (type) {
+        case BuildingType::FOUNDRY:     return "Foundry";
+        case BuildingType::BARRACK:     return "Barracks";
+        case BuildingType::FARM:        return "Farm";
+        case BuildingType::FISHERY:     return "Fishery";
+        case BuildingType::LUMBER_CAMP: return "Lumber Camp";
+        case BuildingType::MINE:        return "Mine";
+    }
+    return "Building";
+}
+
+static const char* buildingEffect(BuildingType type) {
+    switch (type) {
+        case BuildingType::FOUNDRY:     return "Construction -1 turn";
+        case BuildingType::BARRACK:     return "Enables unit training";
+        case BuildingType::FARM:        return "+4 food capacity";
+        case BuildingType::FISHERY:     return "+3 food capacity";
+        case BuildingType::LUMBER_CAMP: return "+2 food capacity";
+        case BuildingType::MINE:        return "+3 metal capacity";
+    }
+    return "";
+}
 
 static const char* terrainName(Terrain t) {
     switch (t) {
@@ -130,6 +155,94 @@ static void drawForecastRow(int cx, int cw, int& y,
 // ---------------------------------------------------------------------------
 // Section renderers
 // ---------------------------------------------------------------------------
+
+static void renderBuildingSection(int cx, int cw, int& y, BuildingType type) {
+    drawDivider(cx, cw, y);
+    DrawText("BUILDING", cx, y, 12, Color{130, 130, 155, 255});
+    y += 22;
+    DrawText(buildingName(type), cx, y, 20, Color{220, 200, 100, 255});
+    y += 28;
+    DrawText(buildingEffect(type), cx, y, 13, Color{160, 185, 130, 255});
+    y += 22;
+}
+
+static void renderTerritorySection(int cx, int cw, int& y,
+                                   const World& world, const City* city) {
+    drawDivider(cx, cw, y);
+    DrawText("TERRITORY", cx, y, 12, Color{130, 130, 155, 255});
+    y += 22;
+
+    DrawText(city->getName().c_str(), cx, y, 18, Color{255, 220, 80, 200});
+    y += 26;
+
+    if (city->hasOwner()) {
+        Color pc = playerColor(city->getOwner().getId());
+        DrawText(TextFormat("Player %d's territory", city->getOwner().getId() + 1),
+                 cx, y, 13, pc);
+        y += 22;
+
+        // Compact capacity bars so player knows the city's status at a glance
+        int pid = city->getOwner().getId();
+        int foodAvail = world.getAvailableCapacity(pid, ResourceType::FOOD);
+        int foodTotal = world.getTotalCapacity(pid, ResourceType::FOOD);
+        int metalAvail = world.getAvailableCapacity(pid, ResourceType::METAL);
+        int metalTotal = world.getTotalCapacity(pid, ResourceType::METAL);
+
+        auto drawSmallBar = [&](const char* label, int avail, int total, Color col) {
+            DrawText(label, cx, y, 11, Color{140, 140, 160, 255});
+            const char* vs = TextFormat("%d/%d", total - avail, total);
+            DrawText(vs, cx + cw - MeasureText(vs, 11) - 2, y, 11, col);
+            y += 13;
+            float fill = (total > 0) ? std::clamp((float)(total - avail) / total, 0.f, 1.f) : 0.f;
+            DrawRectangle(cx, y, cw, 4, Color{35, 35, 50, 255});
+            DrawRectangle(cx, y, (int)(cw * fill), 4, col);
+            DrawRectangleLines(cx, y, cw, 4, Color{55, 55, 75, 255});
+            y += 9;
+        };
+        drawSmallBar("FOOD",  foodAvail,  foodTotal,
+                     foodAvail  >= 0 ? Color{100, 220, 80, 255} : Color{220, 80, 80, 255});
+        drawSmallBar("METAL", metalAvail, metalTotal,
+                     metalAvail >= 0 ? Color{100, 160, 255, 255} : Color{220, 80, 80, 255});
+    } else {
+        DrawText("Unclaimed", cx, y, 13, Color{140, 140, 160, 255});
+        y += 20;
+    }
+}
+
+static void renderShrineSection(int cx, int cw, int& y, const World& world, Position pos) {
+    drawDivider(cx, cw, y);
+
+    const Color purple  = Color{200, 165, 255, 255};
+    const Color dimPurp = Color{140, 110, 190, 255};
+
+    DrawText("SHRINE", cx, y, 12, Color{130, 130, 155, 255});
+    y += 22;
+    DrawText("Place of Power", cx, y, 20, purple);
+    y += 28;
+    DrawText("Move a unit adjacent to", cx, y, 13, dimPurp);
+    y += 17;
+    DrawText("this shrine and switch to", cx, y, 13, dimPurp);
+    y += 17;
+    DrawText("PRAY mode to receive a", cx, y, 13, dimPurp);
+    y += 17;
+    DrawText("choice of 3 spirit boons.", cx, y, 13, dimPurp);
+    y += 22;
+
+    // Show each spirit name with a coloured dot
+    static const struct { SpiritType s; Color col; } SPIRITS[] = {
+        { SpiritType::FLAME,   {255, 120,  50, 255} },
+        { SpiritType::SHADOW,  { 80,  80, 180, 255} },
+        { SpiritType::GALE,    {100, 200, 230, 255} },
+        { SpiritType::MARTIAL, {200, 170,  60, 255} },
+    };
+    DrawText("Possible spirits:", cx, y, 12, Color{120, 120, 140, 255});
+    y += 16;
+    for (const auto& entry : SPIRITS) {
+        DrawCircle(cx + 5, y + 5, 4, entry.col);
+        DrawText(spiritName(entry.s), cx + 14, y, 13, entry.col);
+        y += 18;
+    }
+}
 
 static void renderTerrainSection(int cx, int cw, int& y, Terrain ter) {
     DrawText(terrainName(ter), cx, y, 20, Color{200, 220, 200, 255});
@@ -333,9 +446,10 @@ static void renderCombatForecast(int cx, int cw, int& y,
 InformationView::InformationView() {}
 
 void InformationView::render(const World& world,
-                             const Position* hoverPos,
+                             const Position* viewPos,
                              const Position* selectedPos,
-                             int panelX, int panelW, int screenH) const {
+                             int panelX, int panelW, int screenH,
+                             bool isPinned) const {
     const int PAD = 14;
     const int cx  = panelX + PAD;
     const int cw  = panelW - PAD * 2;
@@ -344,33 +458,64 @@ void InformationView::render(const World& world,
     DrawLine(panelX, 0, panelX, screenH, Color{55, 55, 75, 255});
 
     int y = 70;
-    DrawText("TILE INFO", cx, y, 14, Color{140, 140, 165, 255});
+
+    // Header — "TILE INFO" with a pin badge when locked
+    if (isPinned) {
+        DrawText("TILE INFO", cx, y, 14, Color{200, 190, 100, 255});
+        const char* badge = "PINNED";
+        int bw = MeasureText(badge, 11);
+        DrawRectangle(cx + cw - bw - 10, y - 1, bw + 10, 16, Color{60, 55, 20, 255});
+        DrawRectangleLines(cx + cw - bw - 10, y - 1, bw + 10, 16, Color{180, 160, 60, 255});
+        DrawText(badge, cx + cw - bw - 5, y + 2, 11, Color{220, 200, 80, 255});
+    } else {
+        DrawText("TILE INFO", cx, y, 14, Color{140, 140, 165, 255});
+        DrawText("click to pin", cx + cw - MeasureText("click to pin", 10) - 2, y + 3,
+                 10, Color{90, 90, 110, 255});
+    }
     y += 20;
     DrawLine(cx, y, cx + cw, y, Color{55, 55, 75, 200});
     y += 16;
 
-    if (!hoverPos) {
+    if (!viewPos) {
         DrawText("Hover over a tile", cx, y, 15, GRAY);
         return;
     }
 
-    const Tile&   tile = world.getTileAt(*hoverPos);
+    // Show coordinates
+    DrawText(TextFormat("(%d, %d)", viewPos->row(), viewPos->col()),
+             cx, y, 11, Color{80, 80, 100, 255});
+    y += 18;
+
+    const Tile&   tile = world.getTileAt(*viewPos);
     const Terrain ter  = tile.getTerrain();
 
     renderTerrainSection(cx, cw, y, ter);
+
+    // Shrine on this tile
+    if (tile.hasShrine())
+        renderShrineSection(cx, cw, y, world, *viewPos);
+
+    // Building on this border tile (not city-center buildings)
+    if (tile.hasTileBuilding())
+        renderBuildingSection(cx, cw, y, *tile.getTileBuilding());
 
     if (tile.hasUnit()) {
         const Unit* u = world.getUnit(tile.getUnit().value());
         if (u) renderUnitSection(cx, cw, y, u);
     }
 
-    if (tile.hasCity())
+    // City info: full section for city centres, compact territory for border tiles
+    if (tile.hasCity()) {
         renderCitySection(cx, cw, y, world, tile, tile.getCity());
+    } else {
+        const City* city = world.getCityForTile(*viewPos);
+        if (city) renderTerritorySection(cx, cw, y, world, city);
+    }
 
     if (!selectedPos || !tile.hasUnit() || !world.hasUnitAt(*selectedPos)) return;
     const Unit* sel = world.getUnitAt(*selectedPos);
     const Unit* def = world.getUnit(tile.getUnit().value());
     if (!sel || !def || sel->sameOwner(*def)) return;
 
-    renderCombatForecast(cx, cw, y, world, sel, def, *selectedPos, *hoverPos);
+    renderCombatForecast(cx, cw, y, world, sel, def, *selectedPos, *viewPos);
 }

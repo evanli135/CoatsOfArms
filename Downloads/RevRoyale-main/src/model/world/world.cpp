@@ -678,6 +678,73 @@ std::unordered_set<Position> World::getVisiblePositions(int playerId) const {
 }
 
 // ---------------------------------------------------------------------------
+// Spirit / shrine system
+// ---------------------------------------------------------------------------
+
+void World::addShrine(Position pos) {
+    getTileAt(pos).setShrine(true);
+    shrinePositions.push_back(pos);
+}
+
+bool World::hasShrineAt(Position pos) const {
+    return getTileAt(pos).hasShrine();
+}
+
+bool World::isAdjacentToShrine(Position unitPos) const {
+    for (const auto& sp : shrinePositions) {
+        int dr = std::abs(unitPos.row() - sp.row());
+        int dc = std::abs(unitPos.col() - sp.col());
+        if (std::max(dr, dc) <= 1) return true;   // Chebyshev-1
+    }
+    return false;
+}
+
+std::array<Boon, 3> World::preparePrayChoices(Position unitPos, const Player& player) {
+    auto choices = generateBoonChoices(player.getId(), turn);
+    pendingPrayChoices[player.getId()] = choices;
+    return choices;
+}
+
+std::optional<PlayerError> World::completePray(Position unitPos, int boonIndex, const Player& player) {
+    auto it = pendingPrayChoices.find(player.getId());
+    if (it == pendingPrayChoices.end()) return PlayerError::INVALIDTARGET;
+    if (boonIndex < 0 || boonIndex >= 3)  return PlayerError::INVALIDTARGET;
+
+    // Require the unit to still be at unitPos and still able to act
+    Unit* unit = getUnitAt(unitPos);
+    if (!unit) return PlayerError::INVALIDTARGET;
+    if (unit->getOwner().getId() != player.getId()) return PlayerError::INVALIDTARGET;
+    if (unit->isExhausted()) return PlayerError::INVALIDTARGET;
+
+    // Commit the chosen boon
+    const Boon& chosen = it->second[boonIndex];
+    playerBoons[player.getId()].push_back(chosen);
+    pendingPrayChoices.erase(it);
+
+    // Prayer exhausts the unit (counts as their action for this turn)
+    unit->setMoved(true);
+    unit->setAttacked(true);
+
+    return std::nullopt;
+}
+
+void World::clearPendingPrayChoices(int playerId) {
+    pendingPrayChoices.erase(playerId);
+}
+
+const std::vector<Boon>& World::getPlayerBoons(int playerId) const {
+    static const std::vector<Boon> empty;
+    auto it = playerBoons.find(playerId);
+    return (it != playerBoons.end()) ? it->second : empty;
+}
+
+std::optional<std::array<Boon, 3>> World::getPendingPrayChoices(int playerId) const {
+    auto it = pendingPrayChoices.find(playerId);
+    if (it == pendingPrayChoices.end()) return std::nullopt;
+    return it->second;
+}
+
+// ---------------------------------------------------------------------------
 
 World WorldFactory::create(WorldLayout layout, std::vector<Player> players) {
     World world(players);
@@ -733,6 +800,14 @@ World WorldFactory::create(WorldLayout layout, std::vector<Player> players) {
             world.addUnit(Position(8, 4),  UnitFactory::create(UnitType::SCOUT,   players[1]));
             world.addUnit(Position(7, 8),  UnitFactory::create(UnitType::RANGER,  players[1]));
             world.addUnit(Position(9, 6),  UnitFactory::create(UnitType::CAVALRY, players[1]));
+
+            // --- Shrines — contested power nodes in the centre ---
+            // (4,9): open ground between the two starting positions
+            world.addShrine(Position(4, 9));
+            // (10,4): mirrored position on the south side
+            world.addShrine(Position(10, 4));
+            // (6,11): forest-edge shrine accessible to both flanks
+            world.addShrine(Position(6, 11));
 
             // --- Cities (each starts with a Barracks + 2 Farms on border tiles) ---
             {

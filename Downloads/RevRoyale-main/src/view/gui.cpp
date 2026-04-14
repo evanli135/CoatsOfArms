@@ -31,7 +31,7 @@ void GUI::updateLayout() {
     gridView->applyScrollBounds(sminX, smaxX, sminY, smaxY);
 
     modeButtonSlots.clear();
-    for (int i = 0; i < 3; ++i)
+    for (int i = 0; i < 4; ++i)
         modeButtonSlots.push_back(Rect{
             frameLayout_.actX + i * (ICON_SIZE + BTN_GAP),
             frameLayout_.modeBtnY, ICON_SIZE, ICON_SIZE});
@@ -153,9 +153,10 @@ void GUI::render(const World& world,
 
     // Mode icon row (left panel)
     static const ControllerMode MODES[] = {
-        ControllerMode::TACTIC, ControllerMode::TRAINING, ControllerMode::BUILDING
+        ControllerMode::TACTIC, ControllerMode::TRAINING,
+        ControllerMode::BUILDING, ControllerMode::PRAY
     };
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 4; ++i) {
         const Rect& r = modeButtonSlots[i];
         Sprites::modeIcon(MODES[i], r.x, r.y, ICON_SIZE, static_cast<int>(currentMode) == i);
     }
@@ -164,9 +165,11 @@ void GUI::render(const World& world,
     DrawText("ACTIONS", frameLayout_.actX, frameLayout_.actBtnY - 20, 14, Color{160, 160, 180, 255});
     actionView->render(actionLabels, actionButtonSlots, pendingActionIndex, enabledActions);
 
-    // Info panel (right panel)
-    informationView->render(world, &hoverPos, selectedPos,
-                              frameLayout_.infoPanelX, frameLayout_.infoPanelW, frameLayout_.screenH);
+    // Info panel (right panel) — shows pinned tile when set, otherwise hovered tile
+    const Position* infoPos = pinnedPos_.has_value() ? &*pinnedPos_ : &hoverPos;
+    informationView->render(world, infoPos, selectedPos,
+                              frameLayout_.infoPanelX, frameLayout_.infoPanelW, frameLayout_.screenH,
+                              pinnedPos_.has_value());
 
     // END TURN button
     bool allDone = world.allUnitsExhausted();
@@ -375,8 +378,10 @@ std::optional<ClickTarget> GUI::pollClick(const std::vector<std::string>& action
     if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
         std::optional<ClickTarget> tileClick;
         if (mapDragPhase_ == MapDragPhase::Armed && mapDragStartedOnGrid_) {
-            if (auto pos = pixelToTile(mx, my))
+            if (auto pos = pixelToTile(mx, my)) {
                 tileClick = ClickTarget{*pos};
+                pinnedPos_ = *pos;   // pin the info panel to this tile
+            }
         }
         mapDragPhase_ = MapDragPhase::None;
         if (tileClick)
@@ -422,6 +427,7 @@ std::optional<Position> GUI::pixelToTile(int mx, int my) const {
 void GUI::setError(PlayerError error) { errorView->setError(error); }
 void GUI::clearError()                { errorView->clearError(); }
 void GUI::scrollGrid(int dpx, int dpy){ gridView->scrollBy(dpx, dpy); }
+void GUI::clearPinnedPos()            { pinnedPos_.reset(); }
 
 std::pair<int,int> GUI::tileToPixel(const Position& pos) const {
     auto [scrollX, scrollY] = gridView->getScrollOffset();

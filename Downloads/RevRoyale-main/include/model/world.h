@@ -3,6 +3,8 @@
 #include <vector>
 #include <memory>
 #include <map>
+#include <array>
+#include <unordered_map>
 #include <unordered_set>
 
 #include "model/spirit.h"
@@ -210,6 +212,34 @@ public:
     /** All border tiles owned by playerId that don't yet have a building. */
     std::vector<Position> getBuildableTiles(int playerId) const;
 
+    // ── Shrine / spirit system ────────────────────────────────────────────────
+
+    /** Place a shrine at pos (marks the tile + records position). */
+    void addShrine(Position pos);
+
+    bool hasShrineAt(Position pos) const;
+
+    const std::vector<Position>& getShrinePositions() const { return shrinePositions; }
+
+    /** True if unitPos is Chebyshev-1 adjacent to (or on) any shrine tile. */
+    bool isAdjacentToShrine(Position unitPos) const;
+
+    /** Generates 3 boon choices for this player based on turn + player seed.
+     *  Stores them as pending; call completePray() to finalise. */
+    std::array<Boon, 3> preparePrayChoices(Position unitPos, const Player& player);
+
+    /** Applies boon at pendingChoices[boonIndex] to the player, exhausts the unit. */
+    std::optional<PlayerError> completePray(Position unitPos, int boonIndex, const Player& player);
+
+    /** Discards pending pray choices for this player without applying anything. */
+    void clearPendingPrayChoices(int playerId);
+
+    /** All boons the given player currently holds. */
+    const std::vector<Boon>& getPlayerBoons(int playerId) const;
+
+    /** Pending boon choices for the player, or empty if not in prayer. */
+    std::optional<std::array<Boon, 3>> getPendingPrayChoices(int playerId) const;
+
     void startGame();
 
     /** Returns the set of tile positions visible to the given player this turn.
@@ -259,6 +289,10 @@ private:
     vector<vector<Tile>> grid;
     vector<Player> players;
     vector<Position> cityPositions;
+    vector<Position> shrinePositions;
+
+    unordered_map<int, std::vector<Boon>>              playerBoons;
+    unordered_map<int, std::array<Boon, 3>>            pendingPrayChoices;
 
     unordered_map<UnitId, std::unique_ptr<Unit>> units = unordered_map<UnitId, std::unique_ptr<Unit>>();
 

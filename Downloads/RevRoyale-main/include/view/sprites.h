@@ -32,6 +32,9 @@ namespace Sprites {
      *  slot/total control horizontal offset — same convention as building(). */
     void buildingScaffold(BuildingType type, int px, int py, int turnsLeft, int slot, int total);
 
+    /** Draw a shrine altar at tile top-vertex (px, py). */
+    void shrine(int px, int py);
+
     /** Draw a square mode-switch icon at (ix, iy) with side length sz. */
     void modeIcon(ControllerMode mode, int ix, int iy, int sz, bool active);
 

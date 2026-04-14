@@ -331,4 +331,56 @@ void buildingScaffold(BuildingType type, int px, int py, int turnsLeft, int slot
     DrawCircle(bx, by + 4, 4, typeCol);
 }
 
+// ---------------------------------------------------------------------------
+// shrine — stone altar with a hovering spirit orb.
+// px, py = top vertex of the isometric diamond tile (standard convention).
+// ---------------------------------------------------------------------------
+void shrine(int px, int py) {
+    const int cx = px;
+    const int cy = py + ISO_HALF_H;   // tile centre y
+
+    const Color stone  = Color{130, 118, 105, 255};
+    const Color dark   = Color{ 80,  70,  60, 255};
+    const Color edge   = Color{165, 152, 135, 200};
+    const Color orb    = Color{170, 130, 255, 230};
+    const Color orbHi  = Color{220, 195, 255, 255};
+    const Color rune   = Color{155, 120, 210, 210};
+
+    // ── Raised stone platform (flat diamond) ────────────────────────────────
+    DrawTriangle({(float)cx,       (float)(cy - 5)},
+                 {(float)(cx - 16),(float)(cy + 2)},
+                 {(float)cx,       (float)(cy + 9)}, stone);
+    DrawTriangle({(float)cx,       (float)(cy - 5)},
+                 {(float)cx,       (float)(cy + 9)},
+                 {(float)(cx + 16),(float)(cy + 2)},
+                 Color{(unsigned char)(stone.r-20), (unsigned char)(stone.g-18), (unsigned char)(stone.b-16), 255});
+
+    // ── Stone pillar ─────────────────────────────────────────────────────────
+    DrawRectangle(cx - 3, cy - 25, 7, 20, dark);
+    DrawLine(cx - 3, cy - 25, cx - 3, cy - 5, edge);   // left highlight
+    // Horizontal mortar bands
+    DrawLine(cx - 3, cy - 18, cx + 4, cy - 18, Color{100, 90, 80, 160});
+    DrawLine(cx - 3, cy - 11, cx + 4, cy - 11, Color{100, 90, 80, 160});
+    // Rune glyphs on pillar face
+    DrawLine(cx - 1, cy - 22, cx + 2, cy - 22, rune);
+    DrawLine(cx,     cy - 22, cx,     cy - 20, rune);
+    DrawLine(cx - 1, cy - 15, cx + 2, cy - 15, rune);
+    DrawLine(cx - 1, cy - 13, cx + 2, cy - 13, rune);
+
+    // ── Pillar capital (wider top plate) ─────────────────────────────────────
+    DrawRectangle(cx - 5, cy - 27, 11, 3, stone);
+
+    // ── Hovering spirit orb ───────────────────────────────────────────────────
+    // Outer soft glow
+    DrawCircle(cx, cy - 33, 8, Color{orb.r, orb.g, orb.b, 60});
+    DrawCircle(cx, cy - 33, 6, Color{orb.r, orb.g, orb.b, 120});
+    // Solid orb
+    DrawCircle(cx, cy - 33, 5, orb);
+    // Bright highlight
+    DrawCircle(cx - 1, cy - 34, 2, orbHi);
+
+    // ── Thin tether line from capital to orb ─────────────────────────────────
+    DrawLine(cx, cy - 27, cx, cy - 28, Color{rune.r, rune.g, rune.b, 180});
+}
+
 } // namespace Sprites

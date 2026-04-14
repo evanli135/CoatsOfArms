@@ -92,9 +92,14 @@ public:
 
     void clearTileBuilding() { tileBuilding.reset(); }
 
+    // Shrine flag — a shrine is a world feature placed at map creation.
+    bool hasShrine()      const { return shrine; }
+    void setShrine(bool v)      { shrine = v;    }
+
 private:
     Terrain terrain;
     std::optional<UnitId> unit;
     std::optional<BuildingType> tileBuilding;
     std::optional<City> city;
+    bool shrine = false;
 };

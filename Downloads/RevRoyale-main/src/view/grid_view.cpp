@@ -603,6 +603,7 @@ void GridView::renderCell(const World& world, const Position& pos,
     renderCityBorderLayer(world, pos, px, py);
     renderCityLayer(tile, px, py);
     renderBuildingLayer(world, pos, px, py);
+    if (tile.hasShrine()) Sprites::shrine(px, py);
     if (isBuildable)                       renderBuildableTileLayer(px, py);
     if (isReachable)                       renderReachableLayer(px, py, isHovered);
     if (isAttackable)                      renderAttackableLayer(px, py);

@@ -2,6 +2,7 @@
 #include "controller/modes/tactic_mode.h"
 #include "controller/modes/training_mode.h"
 #include "controller/modes/building_mode.h"
+#include "controller/modes/pray_mode.h"
 #include "model/player.h"
 
 std::unique_ptr<ModeHandler> makeModeHandler(
@@ -11,6 +12,7 @@ std::unique_ptr<ModeHandler> makeModeHandler(
         case ControllerMode::TACTIC:   return std::make_unique<TacticMode>(world, player);
         case ControllerMode::TRAINING: return std::make_unique<TrainingMode>(world, player);
         case ControllerMode::BUILDING: return std::make_unique<BuildingMode>(world, player);
+        case ControllerMode::PRAY:     return std::make_unique<PrayMode>(world, player);
     }
     throw std::logic_error("Unknown ControllerMode");
 }
