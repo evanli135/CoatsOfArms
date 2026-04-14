@@ -31,11 +31,12 @@ std::optional<PlayerError> BuildingMode::onActionButton(int index) {
     static const BuildingType types[] = {
         BuildingType::FOUNDRY,
         BuildingType::BARRACK,
-        BuildingType::EXTRACTOR,
-        BuildingType::SHRINE,
-        BuildingType::UTILITY,
+        BuildingType::FARM,
+        BuildingType::FISHERY,
+        BuildingType::LUMBER_CAMP,
+        BuildingType::MINE,
     };
-    if (index < 0 || index >= 5) return PlayerError::NOTSUPPORTED;
+    if (index < 0 || index >= 6) return PlayerError::NOTSUPPORTED;
 
     auto result = world.issueConstructCommand(*selection, types[index], player);
     if (!result.has_value()) {

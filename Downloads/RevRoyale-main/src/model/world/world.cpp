@@ -36,16 +36,40 @@ static int unitFoodCost(UnitType type) {
     return 0;
 }
 
-// Metal capacity permanently consumed by one placed building of this type.
+// Metal capacity consumed by a placed/queued building (infrastructure only).
+// Food-producing buildings and mines are "free" — they produce capacity, not consume it.
 static int buildingMetalCost(BuildingType type) {
     switch (type) {
-        case BuildingType::FOUNDRY:   return 2;
-        case BuildingType::BARRACK:   return 2;
-        case BuildingType::EXTRACTOR: return 1;
-        case BuildingType::SHRINE:    return 1;
-        case BuildingType::UTILITY:   return 1;
+        case BuildingType::BARRACK:     return 2;
+        case BuildingType::FOUNDRY:     return 1;
+        default:                        return 0;
     }
-    return 0;
+}
+
+// Food capacity produced by one completed food building.
+static int buildingFoodOutput(BuildingType type) {
+    switch (type) {
+        case BuildingType::FARM:        return 4;
+        case BuildingType::FISHERY:     return 3;
+        case BuildingType::LUMBER_CAMP: return 2;
+        default:                        return 0;
+    }
+}
+
+// Metal capacity produced by one completed mine.
+static int buildingMetalOutput(BuildingType type) {
+    return (type == BuildingType::MINE) ? 3 : 0;
+}
+
+// Whether a building type may be placed on a given terrain.
+static bool canBuildOnTerrain(BuildingType type, Terrain terrain) {
+    switch (type) {
+        case BuildingType::FARM:        return terrain == Terrain::GRASS;
+        case BuildingType::FISHERY:     return terrain == Terrain::OCEAN || terrain == Terrain::RIVER;
+        case BuildingType::LUMBER_CAMP: return terrain == Terrain::FOREST;
+        case BuildingType::MINE:        return terrain == Terrain::MOUNTAIN;
+        default:                        return terrain != Terrain::OCEAN;   // BARRACK, FOUNDRY
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -418,7 +442,10 @@ std::optional<PlayerError> World::scheduleConstruction(const Position& tilePos, 
     // Can't build on an occupied tile (unit present or building already there).
     if (getTileAt(tilePos).hasTileBuilding()) return PlayerError::INVALIDTARGET;
     if (getTileAt(tilePos).hasUnit())         return PlayerError::INVALIDTARGET;
-    if (getTileAt(tilePos).getTerrain() == Terrain::OCEAN) return PlayerError::INVALIDTARGET;
+
+    // Building type must be compatible with this tile's terrain.
+    if (!canBuildOnTerrain(type, getTileAt(tilePos).getTerrain()))
+        return PlayerError::INVALIDTARGET;
 
     // Only one construction per tile at a time.
     for (const auto& entry : constructionQueue) {
@@ -454,11 +481,34 @@ std::optional<PlayerError> World::issueConstructCommand(const Position& tilePos,
 
 int World::getTotalCapacity(int playerId, ResourceType rt) const {
     int total = 0;
-    for (const auto& cpos : cityPositions) {
-        const City* city = getCityAt(cpos);
-        if (city && city->hasOwner() && city->getOwner().getId() == playerId)
-            total += cityCapacity(rt);
+
+    if (rt == ResourceType::FOOD) {
+        // Food comes entirely from food buildings on border tiles.
+        for (const auto& cpos : cityPositions) {
+            const City* city = getCityAt(cpos);
+            if (!city || !city->hasOwner() || city->getOwner().getId() != playerId)
+                continue;
+            for (const auto& bpos : getCityBorderTiles(cpos)) {
+                const Tile& t = getTileAt(bpos);
+                if (t.hasTileBuilding())
+                    total += buildingFoodOutput(*t.getTileBuilding());
+            }
+        }
+    } else if (rt == ResourceType::METAL) {
+        // Metal = city base per owned city + mine output on border tiles.
+        for (const auto& cpos : cityPositions) {
+            const City* city = getCityAt(cpos);
+            if (!city || !city->hasOwner() || city->getOwner().getId() != playerId)
+                continue;
+            total += cityCapacity(ResourceType::METAL);   // base per city
+            for (const auto& bpos : getCityBorderTiles(cpos)) {
+                const Tile& t = getTileAt(bpos);
+                if (t.hasTileBuilding())
+                    total += buildingMetalOutput(*t.getTileBuilding());
+            }
+        }
     }
+
     return total;
 }
 
@@ -672,6 +722,9 @@ World WorldFactory::create(WorldLayout layout, std::vector<Player> players) {
             set(0, 4, Terrain::RIVER); set(1, 1, Terrain::RIVER);
             set(10, 11, Terrain::RIVER); set(11, 10, Terrain::RIVER); set(12, 9, Terrain::RIVER);
 
+            // Mountain near Ironhaven so P1 can mine (within Chebyshev-2 border of city at 1,11)
+            set(0, 12, Terrain::MOUNTAIN);
+
             // --- Units ---
             // Blue team
             world.addUnit(Position(4, 3),  UnitFactory::create(UnitType::WARRIOR, players[0]));
@@ -681,16 +734,21 @@ World WorldFactory::create(WorldLayout layout, std::vector<Player> players) {
             world.addUnit(Position(7, 8),  UnitFactory::create(UnitType::RANGER,  players[1]));
             world.addUnit(Position(9, 6),  UnitFactory::create(UnitType::CAVALRY, players[1]));
 
-            // --- Cities (each starts with a Barracks on an adjacent border tile) ---
+            // --- Cities (each starts with a Barracks + 2 Farms on border tiles) ---
             {
                 world.addCity(Position(1, 11), City("Ironhaven"), 0);
-                // Starting Barrack on a border tile south of Ironhaven
+                // Starting Barrack south of city; two farms for food production
+                // Note: (0,11) is FOREST so use (0,10) and (1,10) instead (both GRASS)
                 world.getTileAt(Position(2, 11)).setTileBuilding(BuildingType::BARRACK);
+                world.getTileAt(Position(0, 10)).setTileBuilding(BuildingType::FARM);
+                world.getTileAt(Position(1, 10)).setTileBuilding(BuildingType::FARM);
             }
             {
                 world.addCity(Position(12, 2), City("Stonekeep"), 1);
-                // Starting Barrack on a border tile north of Stonekeep
+                // Starting Barrack north of city; two farms for food production
                 world.getTileAt(Position(11, 2)).setTileBuilding(BuildingType::BARRACK);
+                world.getTileAt(Position(13, 2)).setTileBuilding(BuildingType::FARM);
+                world.getTileAt(Position(12, 3)).setTileBuilding(BuildingType::FARM);
             }
             break;
         }

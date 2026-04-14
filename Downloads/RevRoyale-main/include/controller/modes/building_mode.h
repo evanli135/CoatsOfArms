@@ -75,7 +75,7 @@ public:
 
     /** Returns all constructable building types. */
     std::vector<std::string> getActionLabels() const override {
-        return {"Foundry", "Barrack", "Extractor", "Shrine", "Utility"};
+        return {"Foundry", "Barrack", "Farm (grass)", "Fishery (water)", "Lumber Camp (forest)", "Mine (mountain)"};
     }
 
 private:

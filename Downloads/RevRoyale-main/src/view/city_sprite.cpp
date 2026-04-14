@@ -183,6 +183,96 @@ static void drawFoundry(int bx, int by) {
     DrawRectangle(bx + 3, by - 12, 3, 5, Color{255, 180, 60, 255});
 }
 
+static void drawFarm(int bx, int by) {
+    const Color soil  = Color{145, 100,  55, 255};
+    const Color straw = Color{210, 175,  60, 255};
+    const Color wood  = Color{160, 110,  50, 255};
+    const Color dark  = Color{ 60,  38,  14, 220};
+
+    // Barn body
+    DrawRectangle(bx - 8, by - 14, 16, 12, wood);
+    // Pitched roof
+    DrawTriangle({(float)bx,        (float)(by - 14 - 8)},
+                 {(float)(bx - 9),  (float)(by - 14)},
+                 {(float)(bx + 9),  (float)(by - 14)},
+                 straw);
+    // Door
+    DrawRectangle(bx - 2, by - 8, 5, 8, dark);
+    // Hay cross on door
+    DrawLine(bx - 2, by - 8, bx + 3, by - 2, Color{190, 150, 50, 180});
+    DrawLine(bx + 3, by - 8, bx - 2, by - 2, Color{190, 150, 50, 180});
+    // Soil strip at base
+    DrawRectangle(bx - 10, by - 2, 20, 3, soil);
+}
+
+static void drawFishery(int bx, int by) {
+    const Color planks = Color{130, 100,  65, 255};
+    const Color dark   = Color{ 50,  35,  16, 220};
+    const Color water  = Color{ 60, 130, 190, 200};
+    const Color rope   = Color{200, 170,  90, 200};
+
+    // Dock platform
+    DrawRectangle(bx - 10, by - 5,  20, 4, planks);
+    DrawLine(bx - 8, by - 5,  bx - 8, by - 1, dark);
+    DrawLine(bx,     by - 5,  bx,     by - 1, dark);
+    DrawLine(bx + 8, by - 5,  bx + 8, by - 1, dark);
+    // Water shimmer
+    DrawRectangle(bx - 10, by - 1,  20, 3, water);
+    // Hut on dock
+    DrawRectangle(bx - 6, by - 16, 12, 11, planks);
+    DrawTriangle({(float)bx,       (float)(by - 16 - 6)},
+                 {(float)(bx - 7), (float)(by - 16)},
+                 {(float)(bx + 7), (float)(by - 16)},
+                 dark);
+    // Fishing pole
+    DrawLine(bx + 5, by - 20, bx + 12, by - 5, rope);
+    DrawCircle(bx + 12, by - 5, 2, Color{255, 255, 255, 200});
+}
+
+static void drawLumberCamp(int bx, int by) {
+    const Color log   = Color{140,  90,  45, 255};
+    const Color bark  = Color{ 90,  60,  25, 255};
+    const Color stump = Color{120,  80,  40, 255};
+    const Color blade = Color{190, 190, 200, 240};
+
+    // Log pile (three stacked logs)
+    DrawRectangle(bx - 9, by - 8,  18, 6, log);
+    DrawLine(bx - 9, by - 5, bx + 9, by - 5, bark);
+    DrawRectangle(bx - 7, by - 13, 14, 5, log);
+    DrawLine(bx - 7, by - 11, bx + 7, by - 11, bark);
+    DrawRectangle(bx - 5, by - 17, 10, 4, log);
+    // Stump
+    DrawRectangle(bx - 5, by - 4,  10, 4, stump);
+    // Axe
+    DrawLine(bx + 7, by - 22, bx + 3, by - 6, Color{160, 110, 50, 220});
+    DrawTriangle({(float)(bx + 7),  (float)(by - 22)},
+                 {(float)(bx + 13), (float)(by - 19)},
+                 {(float)(bx + 9),  (float)(by - 14)},
+                 blade);
+}
+
+static void drawMine(int bx, int by) {
+    const Color stone  = Color{100,  90,  80, 255};
+    const Color dark   = Color{ 25,  18,  12, 255};
+    const Color timber = Color{160, 120,  55, 255};
+    const Color ore    = Color{200, 160,  50, 230};
+
+    // Rock face
+    DrawRectangle(bx - 11, by - 14, 22, 13, stone);
+    // Mine entrance arch
+    DrawRectangle(bx - 5, by - 12,  10, 11, dark);
+    DrawCircle(bx, by - 12, 5, dark);
+    // Timber frame
+    DrawLine(bx - 6, by - 14, bx - 6, by - 2, timber);
+    DrawLine(bx + 6, by - 14, bx + 6, by - 2, timber);
+    DrawLine(bx - 6, by - 14, bx + 6, by - 14, timber);
+    // Ore glint inside
+    DrawCircle(bx - 2, by - 8, 2, ore);
+    DrawCircle(bx + 3, by - 10, 2, ore);
+    // Cart rail line
+    DrawLine(bx - 9, by, bx + 9, by, Color{130, 100, 55, 200});
+}
+
 void building(BuildingType type, int px, int py, Color factionColor, int slot, int total) {
     // Anchor all buildings in a row along the front base of the city tile.
     // Centre the row horizontally at px, 24px spacing between slots.
@@ -193,9 +283,12 @@ void building(BuildingType type, int px, int py, Color factionColor, int slot, i
     const int by = py + ISO_HALF_H + 18;   // just in front of the castle base
 
     switch (type) {
-        case BuildingType::BARRACK:  drawBarracks(bx, by, factionColor); break;
-        case BuildingType::FOUNDRY:  drawFoundry(bx, by);                break;
-        default: break;
+        case BuildingType::BARRACK:      drawBarracks(bx, by, factionColor); break;
+        case BuildingType::FOUNDRY:      drawFoundry(bx, by);                break;
+        case BuildingType::FARM:         drawFarm(bx, by);                   break;
+        case BuildingType::FISHERY:      drawFishery(bx, by);                break;
+        case BuildingType::LUMBER_CAMP:  drawLumberCamp(bx, by);             break;
+        case BuildingType::MINE:         drawMine(bx, by);                   break;
     }
 }
 
@@ -228,9 +321,13 @@ void buildingScaffold(BuildingType type, int px, int py, int turnsLeft, int slot
     DrawText(label, bx - lw / 2, by - 30, 11, Color{220, 220, 100, 255});
 
     // Building-type icon below (tiny coloured dot so player knows what's coming)
-    Color typeCol = (type == BuildingType::BARRACK) ? Color{200, 80, 80, 255}
-                 : (type == BuildingType::FOUNDRY)  ? Color{255, 140, 30, 255}
-                 :                                    Color{180, 180, 180, 255};
+    Color typeCol = (type == BuildingType::BARRACK)     ? Color{200,  80,  80, 255}
+                 : (type == BuildingType::FOUNDRY)      ? Color{255, 140,  30, 255}
+                 : (type == BuildingType::FARM)         ? Color{160, 200,  60, 255}
+                 : (type == BuildingType::FISHERY)      ? Color{ 60, 160, 220, 255}
+                 : (type == BuildingType::LUMBER_CAMP)  ? Color{160, 110,  50, 255}
+                 : (type == BuildingType::MINE)         ? Color{200, 160,  50, 255}
+                 :                                        Color{180, 180, 180, 255};
     DrawCircle(bx, by + 4, 4, typeCol);
 }
 

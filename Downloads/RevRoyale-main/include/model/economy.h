@@ -11,11 +11,12 @@ enum class ResourceType {
 };
 
 enum class BuildingType {
-    FOUNDRY,
-    BARRACK,
-    EXTRACTOR,
-    SHRINE,
-    UTILITY
+    FOUNDRY,       // speeds up construction (-1 turn), no terrain req
+    BARRACK,       // enables unit training, no terrain req
+    FARM,          // +4 food capacity, requires GRASS
+    FISHERY,       // +3 food capacity, requires OCEAN or RIVER
+    LUMBER_CAMP,   // +2 food capacity, requires FOREST
+    MINE,          // +3 metal capacity, requires MOUNTAIN
 };
 
 class Building {
@@ -28,8 +29,6 @@ public:
     int constructionCompletion() const;
 
     void addConstruction(int cost);
-
-    bool isLocal() const {     return type == BuildingType::EXTRACTOR || type == BuildingType::UTILITY; }
 
 private:
     std::string name;
@@ -55,28 +54,15 @@ namespace std {
 // Static capacity helpers — used by World to compute available resources.
 // ---------------------------------------------------------------------------
 
-// Food/metal produced per turn by a single owned city.
+// Metal provided by a single owned city (base supply; food comes only from buildings).
 inline int cityCapacity(ResourceType rt) {
-    if (rt == ResourceType::FOOD)  return 10;
-    if (rt == ResourceType::METAL) return 5;
-    return 0;
+    if (rt == ResourceType::METAL) return 3;
+    return 0;   // FOOD: cities provide no food — build farms/fisheries/lumber camps
 }
 
 class BuildingFactory {
 public:
     static Building createBuilding(BuildingType type) {
-        switch (type) {
-            case BuildingType::FOUNDRY:
-                return Building(BuildingType::FOUNDRY);
-            case BuildingType::BARRACK:
-                return Building(BuildingType::BARRACK);
-            case BuildingType::EXTRACTOR:
-                return Building(BuildingType::EXTRACTOR);
-            case BuildingType::SHRINE:
-                return Building(BuildingType::SHRINE);
-            case BuildingType::UTILITY:
-                return Building(BuildingType::UTILITY);
-        }
-    
+        return Building(type);
     }
 };
