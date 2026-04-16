@@ -1,0 +1,16 @@
+build/
+bin/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+.DS_Store
+.vscode/
+.idea/
+cmake-build-debug/
+claudecmd.txt
+vibecodeslop.py
