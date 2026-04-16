@@ -17,6 +17,7 @@ enum class BuildingType {
     FISHERY,       // +3 food capacity, requires OCEAN or RIVER
     LUMBER_CAMP,   // +2 food capacity, requires FOREST
     MINE,          // +3 metal capacity, requires MOUNTAIN
+    SHRINE,        // lets adjacent units pray for spirit blessings; no terrain req (except ocean)
 };
 
 class Building {
@@ -54,10 +55,12 @@ namespace std {
 // Static capacity helpers — used by World to compute available resources.
 // ---------------------------------------------------------------------------
 
-// Metal provided by a single owned city (base supply; food comes only from buildings).
+// Base resource capacity provided by a single owned city.
+// Food comes only from buildings; metal and wood have a city base supply.
 inline int cityCapacity(ResourceType rt) {
     if (rt == ResourceType::METAL) return 3;
-    return 0;   // FOOD: cities provide no food — build farms/fisheries/lumber camps
+    if (rt == ResourceType::WOOD)  return 2;
+    return 0;   // FOOD: build Farms/Fisheries; cities provide no food
 }
 
 class BuildingFactory {

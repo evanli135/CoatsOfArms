@@ -7,6 +7,7 @@
 #include "controller/mouse.h"
 #include "view/gui.h"
 #include "view/fog.h"
+#include "view/audio.h"
 
 
 int main() {
@@ -14,6 +15,8 @@ int main() {
     SetWindowState(FLAG_WINDOW_RESIZABLE);
     MaximizeWindow();
     SetTargetFPS(60);
+    InitAudioDevice();
+    AudioManager::get().init();
 
     Player p1 = Player(0);
     Player p2 = Player(1);
@@ -74,10 +77,10 @@ int main() {
                 applyResult(active.onClick(ClickTarget{*hp}));
             }
         }
-        if (IsKeyPressed(KEY_BACKSPACE))
+        if (IsKeyPressed(KEY_BACKSPACE)) {
             active.onRightClick();
-        if (IsKeyPressed(KEY_LEFT_SHIFT))
-            applyResult(active.onEndTurn());
+            view.clearPinnedPos();
+        }
         if (IsKeyPressed(KEY_ONE))   applyResult(active.onClick(ClickTarget{0}));
         if (IsKeyPressed(KEY_TWO))   applyResult(active.onClick(ClickTarget{1}));
         if (IsKeyPressed(KEY_THREE)) applyResult(active.onClick(ClickTarget{2}));
@@ -100,9 +103,11 @@ int main() {
             }
         }
 
-        // --- Right click — deselect / cancel ---
-        if (pollMouseRightClick())
+        // --- Right click — deselect / cancel / unpin info panel ---
+        if (pollMouseRightClick()) {
             active.onRightClick();
+            view.clearPinnedPos();
+        }
 
         BeginDrawing();
 
@@ -128,12 +133,16 @@ int main() {
             selPos.has_value() ? &selPos.value() : nullptr,
             active.getActionLabels(),
             active.getCurrentMode(),
-            pendingIdx
+            active.getEnabledActions(),
+            pendingIdx,
+            active.getPendingBlessingChoices()
         );
 
         EndDrawing();
     }
 
+    AudioManager::get().shutdown();
+    CloseAudioDevice();
     CloseWindow();
     return 0;
 }

@@ -7,6 +7,7 @@
 #include "model/economy.h"
 #include "model/spirit.h"
 #include "model/world.h"
+#include "model/resource_system.h"
 #include "raylib.h"
 
 // ---------------------------------------------------------------------------
@@ -21,6 +22,7 @@ static const char* buildingName(BuildingType type) {
         case BuildingType::FISHERY:     return "Fishery";
         case BuildingType::LUMBER_CAMP: return "Lumber Camp";
         case BuildingType::MINE:        return "Mine";
+        case BuildingType::SHRINE:      return "Shrine";
     }
     return "Building";
 }
@@ -33,6 +35,7 @@ static const char* buildingEffect(BuildingType type) {
         case BuildingType::FISHERY:     return "+3 food capacity";
         case BuildingType::LUMBER_CAMP: return "+2 food capacity";
         case BuildingType::MINE:        return "+3 metal capacity";
+        case BuildingType::SHRINE:      return "Pray here for spirit blessings";
     }
     return "";
 }
@@ -59,11 +62,28 @@ static const char* terrainCost(Terrain t) {
     }
 }
 
+static const char* resourceValueName(TileResourceValue rv) {
+    switch (rv) {
+        case TileResourceValue::LOW:    return "Low";
+        case TileResourceValue::MEDIUM: return "Medium";
+        case TileResourceValue::HIGH:   return "High";
+    }
+    return "?";
+}
+
+static Color resourceValueColor(TileResourceValue rv) {
+    switch (rv) {
+        case TileResourceValue::LOW:    return Color{190,  90,  60, 255};
+        case TileResourceValue::HIGH:   return Color{240, 205,  50, 255};
+        default:                        return Color{ 70, 200, 175, 255};
+    }
+}
+
 static const char* terrainDesc(Terrain t) {
     switch (t) {
-        case Terrain::GRASS:    return "Open ground. Easy to traverse.";
-        case Terrain::FOREST:   return "Dense trees. Slows movement.";
-        case Terrain::MOUNTAIN: return "Rugged peaks. Hard to traverse.";
+        case Terrain::GRASS:    return "Open ground. No defensive bonus.";
+        case Terrain::FOREST:   return "Dense trees. -2 damage taken.";
+        case Terrain::MOUNTAIN: return "Rugged peaks. -3 damage taken.";
         case Terrain::OCEAN:    return "Deep water. Impassable on foot.";
         case Terrain::RIVER:    return "Swift current. Costly to cross.";
         default: return "";
@@ -156,14 +176,37 @@ static void drawForecastRow(int cx, int cw, int& y,
 // Section renderers
 // ---------------------------------------------------------------------------
 
-static void renderBuildingSection(int cx, int cw, int& y, BuildingType type) {
+static void renderBuildingSection(int cx, int cw, int& y,
+                                   BuildingType type, TileResourceValue rv) {
     drawDivider(cx, cw, y);
     DrawText("BUILDING", cx, y, 12, Color{130, 130, 155, 255});
     y += 22;
     DrawText(buildingName(type), cx, y, 20, Color{220, 200, 100, 255});
     y += 28;
-    DrawText(buildingEffect(type), cx, y, 13, Color{160, 185, 130, 255});
-    y += 22;
+
+    int foodBase  = ResourceSystem::buildingFoodOutput(type);
+    int metalBase = ResourceSystem::buildingMetalOutput(type);
+    int bonus = rv == TileResourceValue::LOW  ? -1 :
+                rv == TileResourceValue::HIGH ? +2 : 0;
+
+    if (foodBase > 0 || metalBase > 0) {
+        // Show effective yield (base + tile bonus)
+        int effective = (foodBase > 0)
+            ? std::max(1, foodBase  + bonus)
+            : std::max(1, metalBase + bonus);
+        const char* unit = (foodBase > 0) ? "food" : "metal";
+        Color yieldCol = resourceValueColor(rv);
+        DrawText(TextFormat("+%d %s capacity", effective, unit), cx, y, 13, yieldCol);
+        if (bonus != 0) {
+            const char* bonusTag = TextFormat("(%+d tile bonus)", bonus);
+            DrawText(bonusTag, cx + cw - MeasureText(bonusTag, 11) - 2, y + 1, 11,
+                     Color{yieldCol.r, yieldCol.g, yieldCol.b, 180});
+        }
+        y += 20;
+    } else {
+        DrawText(buildingEffect(type), cx, y, 13, Color{160, 185, 130, 255});
+        y += 22;
+    }
 }
 
 static void renderTerritorySection(int cx, int cw, int& y,
@@ -183,10 +226,12 @@ static void renderTerritorySection(int cx, int cw, int& y,
 
         // Compact capacity bars so player knows the city's status at a glance
         int pid = city->getOwner().getId();
-        int foodAvail = world.getAvailableCapacity(pid, ResourceType::FOOD);
-        int foodTotal = world.getTotalCapacity(pid, ResourceType::FOOD);
+        int foodAvail  = world.getAvailableCapacity(pid, ResourceType::FOOD);
+        int foodTotal  = world.getTotalCapacity(pid, ResourceType::FOOD);
         int metalAvail = world.getAvailableCapacity(pid, ResourceType::METAL);
         int metalTotal = world.getTotalCapacity(pid, ResourceType::METAL);
+        int woodAvail  = world.getAvailableCapacity(pid, ResourceType::WOOD);
+        int woodTotal  = world.getTotalCapacity(pid, ResourceType::WOOD);
 
         auto drawSmallBar = [&](const char* label, int avail, int total, Color col) {
             DrawText(label, cx, y, 11, Color{140, 140, 160, 255});
@@ -200,9 +245,11 @@ static void renderTerritorySection(int cx, int cw, int& y,
             y += 9;
         };
         drawSmallBar("FOOD",  foodAvail,  foodTotal,
-                     foodAvail  >= 0 ? Color{100, 220, 80, 255} : Color{220, 80, 80, 255});
+                     foodAvail  >= 0 ? Color{100, 220,  80, 255} : Color{220,  80,  80, 255});
+        drawSmallBar("WOOD",  woodAvail,  woodTotal,
+                     woodAvail  >= 0 ? Color{180, 130,  60, 255} : Color{220,  80,  80, 255});
         drawSmallBar("METAL", metalAvail, metalTotal,
-                     metalAvail >= 0 ? Color{100, 160, 255, 255} : Color{220, 80, 80, 255});
+                     metalAvail >= 0 ? Color{100, 160, 255, 255} : Color{220,  80,  80, 255});
     } else {
         DrawText("Unclaimed", cx, y, 13, Color{140, 140, 160, 255});
         y += 20;
@@ -225,7 +272,7 @@ static void renderShrineSection(int cx, int cw, int& y, const World& world, Posi
     y += 17;
     DrawText("PRAY mode to receive a", cx, y, 13, dimPurp);
     y += 17;
-    DrawText("choice of 3 spirit boons.", cx, y, 13, dimPurp);
+    DrawText("choice of 3 spirit blessings.", cx, y, 13, dimPurp);
     y += 22;
 
     // Show each spirit name with a coloured dot
@@ -244,13 +291,28 @@ static void renderShrineSection(int cx, int cw, int& y, const World& world, Posi
     }
 }
 
-static void renderTerrainSection(int cx, int cw, int& y, Terrain ter) {
+static void renderTerrainSection(int cx, int cw, int& y, Terrain ter, TileResourceValue rv) {
     DrawText(terrainName(ter), cx, y, 20, Color{200, 220, 200, 255});
     DrawText(TextFormat("COST  %s", terrainCost(ter)),
              cx + cw - 90, y + 3, 12, Color{145, 175, 145, 255});
     y += 28;
     DrawText(terrainDesc(ter), cx, y, 13, Color{115, 130, 115, 255});
-    y += 28;
+    y += 22;
+
+    // Resource value badge
+    const char* rvName = resourceValueName(rv);
+    Color rvCol = resourceValueColor(rv);
+    DrawText("RESOURCES", cx, y, 11, Color{130, 130, 155, 255});
+    const char* bonusStr =
+        rv == TileResourceValue::LOW  ? "-1 yield" :
+        rv == TileResourceValue::HIGH ? "+2 yield" : "base yield";
+    int bw = MeasureText(bonusStr, 11);
+    DrawRectangle(cx + cw - bw - 10, y - 1, bw + 10, 15, Color{25, 25, 38, 230});
+    DrawRectangleLines(cx + cw - bw - 10, y - 1, bw + 10, 15, rvCol);
+    DrawText(bonusStr, cx + cw - bw - 5, y + 2, 11, rvCol);
+    y += 15;
+    DrawText(rvName, cx, y, 14, rvCol);
+    y += 20;
 }
 
 static void renderUnitSection(int cx, int cw, int& y, const Unit* u) {
@@ -269,17 +331,37 @@ static void renderUnitSection(int cx, int cw, int& y, const Unit* u) {
     DrawText(unitName(u->getType()), cx, y, 22, pc);
     y += 32;
 
+    // HP bar
     const float hpFrac = (float)u->getHealth() / (float)u->getMaxHealth();
     const Color hpCol  = hpFrac >= 0.5f ? Color{200, 220, 200, 255} : Color{220, 60, 60, 255};
     DrawText("HP", cx, y, 13, Color{150, 150, 170, 255});
     DrawText(TextFormat("%d / %d", u->getHealth(), u->getMaxHealth()), cx + 30, y, 15, hpCol);
-    y += 30;
+    y += 18;
+    DrawRectangle(cx, y, cw, 5, Color{35, 35, 50, 255});
+    DrawRectangle(cx, y, (int)(cw * hpFrac), 5, hpCol);
+    DrawRectangleLines(cx, y, cw, 5, Color{55, 55, 75, 255});
+    y += 14;
 
-    const StatBox coreStats[2] = {
-        {"MOV", u->getMovement(), {120, 160, 220, 255}, {160, 200, 255, 255}},
-        {"RNG", u->getRange(),    {180, 210, 130, 255}, {210, 240, 160, 255}},
+    // Magic bar
+    const int   mp     = u->getCurrentMagic();
+    const int   mpMax  = u->getMaxMagic();
+    const float mpFrac = mpMax > 0 ? (float)mp / mpMax : 0.f;
+    const Color mpCol  = Color{130, 100, 230, 255};
+    const Color mpDim  = Color{ 90,  70, 160, 255};
+    DrawText("MP", cx, y, 13, Color{150, 150, 170, 255});
+    DrawText(TextFormat("%d / %d", mp, mpMax), cx + 30, y, 15, mpCol);
+    y += 18;
+    DrawRectangle(cx, y, cw, 5, Color{25, 20, 45, 255});
+    DrawRectangle(cx, y, (int)(cw * mpFrac), 5, mpCol);
+    DrawRectangleLines(cx, y, cw, 5, Color{55, 45, 85, 255});
+    y += 18;
+
+    const StatBox coreStats[3] = {
+        {"MOV", u->getMovement(),  {120, 160, 220, 255}, {160, 200, 255, 255}},
+        {"RNG", u->getRange(),     {180, 210, 130, 255}, {210, 240, 160, 255}},
+        {"AFF", u->getAffinity(),  { 90,  70, 160, 255}, {130, 100, 230, 255}},
     };
-    drawWideStatRow(cx, cw, y, coreStats, 2);
+    drawWideStatRow(cx, cw, y, coreStats, 3);
 
     const StatBox offStats[4] = {
         {"STR", u->getStrength(),   {230, 140,  80, 255}, {255, 175, 110, 255}},
@@ -328,8 +410,10 @@ static void renderCitySection(int cx, int cw, int& y,
 
         // Capacity bars
         int pid = city->getOwner().getId();
-        int foodAvail = world.getAvailableCapacity(pid, ResourceType::FOOD);
-        int foodTotal = world.getTotalCapacity(pid, ResourceType::FOOD);
+        int foodAvail  = world.getAvailableCapacity(pid, ResourceType::FOOD);
+        int foodTotal  = world.getTotalCapacity(pid, ResourceType::FOOD);
+        int woodAvail  = world.getAvailableCapacity(pid, ResourceType::WOOD);
+        int woodTotal  = world.getTotalCapacity(pid, ResourceType::WOOD);
         int metalAvail = world.getAvailableCapacity(pid, ResourceType::METAL);
         int metalTotal = world.getTotalCapacity(pid, ResourceType::METAL);
 
@@ -346,10 +430,12 @@ static void renderCitySection(int cx, int cw, int& y,
             DrawRectangleLines(cx, y, barW, 5, Color{55, 55, 75, 255});
             y += 10;
         };
-        drawCapBar("FOOD  used", foodAvail, foodTotal,
-                   foodAvail > 0 ? Color{100, 220, 80, 255} : Color{220, 80, 80, 255});
+        drawCapBar("FOOD  used", foodAvail,  foodTotal,
+                   foodAvail  >= 0 ? Color{100, 220,  80, 255} : Color{220,  80,  80, 255});
+        drawCapBar("WOOD  used", woodAvail,  woodTotal,
+                   woodAvail  >= 0 ? Color{180, 130,  60, 255} : Color{220,  80,  80, 255});
         drawCapBar("METAL used", metalAvail, metalTotal,
-                   metalAvail > 0 ? Color{100, 160, 255, 255} : Color{220, 80, 80, 255});
+                   metalAvail >= 0 ? Color{100, 160, 255, 255} : Color{220,  80,  80, 255});
         y += 4;
     } else {
         DrawText("Unclaimed", cx, y, 14, Color{140, 140, 160, 255});
@@ -424,6 +510,29 @@ static void renderCombatForecast(int cx, int cw, int& y,
     DrawText("ATTACK", cx, y, 11, Color{130, 130, 155, 255});
     drawHitBadge(cx, cw, y, fc.attackHitChance);
     y += 16;
+
+    // Situational modifier badges (shown between the header and the damage row)
+    if (fc.terrainReduction > 0 || fc.isFlank || fc.isEncircled) {
+        int bx = cx;
+        auto badge = [&](const char* text, Color bg, Color border, Color tc) {
+            int tw = MeasureText(text, 10);
+            DrawRectangle(bx, y, tw + 10, 16, bg);
+            DrawRectangleLines(bx, y, tw + 10, 16, border);
+            DrawText(text, bx + 5, y + 3, 10, tc);
+            bx += tw + 14;
+        };
+        if (fc.terrainReduction > 0)
+            badge(TextFormat("COVER -%d", fc.terrainReduction),
+                  Color{20, 45, 20, 230}, Color{55, 130, 55, 255}, Color{100, 210, 100, 255});
+        if (fc.isFlank)
+            badge(TextFormat("FLANK +%d", fc.flankBonus),
+                  Color{55, 35, 10, 230}, Color{200, 130, 40, 255}, Color{255, 180, 80, 255});
+        if (fc.isEncircled)
+            badge(TextFormat("ENCIRCLED +%d", fc.encircleBonus),
+                  Color{50, 15, 15, 230}, Color{200, 60, 60, 255}, Color{255, 100, 100, 255});
+        y += 20;
+    }
+
     drawForecastRow(cx, cw, y, unitName(sel->getType()), playerColor(sel->getOwner().getId()),
                     fc.damage, fc.defenderHpBefore, fc.defenderHpAfter, fc.lethal);
 
@@ -489,15 +598,18 @@ void InformationView::render(const World& world,
     const Tile&   tile = world.getTileAt(*viewPos);
     const Terrain ter  = tile.getTerrain();
 
-    renderTerrainSection(cx, cw, y, ter);
+    renderTerrainSection(cx, cw, y, ter, tile.getTileResourceValue());
 
-    // Shrine on this tile
-    if (tile.hasShrine())
+    // Building on this border tile — shrine gets its own richer section
+    if (tile.hasTileBuilding()) {
+        if (*tile.getTileBuilding() == BuildingType::SHRINE)
+            renderShrineSection(cx, cw, y, world, *viewPos);
+        else
+            renderBuildingSection(cx, cw, y, *tile.getTileBuilding(), tile.getTileResourceValue());
+    } else if (tile.hasShrine()) {
+        // Legacy standalone shrine (no longer placed, but guard for safety)
         renderShrineSection(cx, cw, y, world, *viewPos);
-
-    // Building on this border tile (not city-center buildings)
-    if (tile.hasTileBuilding())
-        renderBuildingSection(cx, cw, y, *tile.getTileBuilding());
+    }
 
     if (tile.hasUnit()) {
         const Unit* u = world.getUnit(tile.getUnit().value());

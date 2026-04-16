@@ -81,6 +81,8 @@ public:
         return {"Warrior", "Scout", "Ranger", "Cavalry", "Mage"};
     }
 
+    std::vector<bool> getEnabledActions() const override;
+
 private:
     World& world;
     const Player& player;

@@ -81,6 +81,8 @@ struct UnitTemplate {
     int agi;   // agility    — −2% hit chance per attacker point
     int ini;   // initiative — bonus damage only when this unit initiates
     int grd;   // guard      — flat reduction to any incoming attack
+    // Magic
+    int aff;   // affinity   — max magic = aff×5; magic regen per turn = aff
 };
 
 
@@ -126,6 +128,17 @@ public:
 
 
 // -------------------------
+// BurnEffect — damage-over-time debuff applied by fire spells.
+// Ticks at the start of the afflicted unit owner's turn.
+// -------------------------
+
+struct BurnEffect {
+    int turnsRemaining;  // how many turns the burn still deals damage
+    int damagePerTurn;   // HP lost each tick
+};
+
+
+// -------------------------
 // Unit
 // -------------------------
 
@@ -135,17 +148,18 @@ public:
         : id(id), type(type), player(player),
           tmpl(tmpl),
           health(tmpl ? tmpl->maxHealth : 0),
+          currentMagic(tmpl ? tmpl->aff * 5 : 0),
           moved(false), attacked(false) {}
 
     bool isAlive()   const { return health > 0; }
-    bool canMove()   const { return !moved && !attacked; }
+    bool canMove()   const { return !moved && (!attacked || tumble); }
     bool canAttack() const { return !attacked; }
 
     UnitId          getId()        const { return id; }
     int             getHealth()    const { return health; }
     int             getMaxHealth() const { return tmpl->maxHealth; }
-    int             getMovement()   const { return tmpl->mov; }
-    int             getRange()      const { return tmpl->range; }
+    int             getMovement()   const { return tmpl->mov + movBonus; }
+    int             getRange()      const { return tmpl->range + rangeBonus; }
     int             getSightRange() const { return tmpl->sight; }
     int             getStrength()   const { return tmpl->str;  }
     int             getSpecial()    const { return tmpl->spc;  }
@@ -155,6 +169,41 @@ public:
     int             getAgility()    const { return tmpl->agi;  }
     int             getInitiative() const { return tmpl->ini;  }
     int             getGuard()      const { return tmpl->grd;  }
+    int             getAffinity()   const { return tmpl->aff;  }
+
+    // ── Magic pool ────────────────────────────────────────────────────────
+    int  getMaxMagic()     const { return tmpl->aff * 5; }
+    int  getCurrentMagic() const { return currentMagic; }
+
+    /** True if the unit has at least `cost` magic points. */
+    bool canCast(int cost) const { return cost >= 0 && currentMagic >= cost; }
+
+    /** Deduct `cost` magic points.  Clamps to 0. */
+    void spendMagic(int cost) { currentMagic = std::max(0, currentMagic - cost); }
+
+    /** Regenerate aff magic points, clamped to maxMagic.  Called at turn start. */
+    void regenMagic() { currentMagic = std::min(getMaxMagic(), currentMagic + tmpl->aff); }
+
+    /** Set magic directly — used by command undo to restore pre-cast magic. */
+    void setMagic(int m) { currentMagic = std::max(0, std::min(getMaxMagic(), m)); }
+
+    // ── Burn DoT ──────────────────────────────────────────────────────────────
+    bool hasBurn() const { return burnEffect.has_value(); }
+
+    /** Apply (or refresh) a burn debuff: deals dmg per turn for `turns` turns. */
+    void applyBurn(int turns, int dmg) { burnEffect = BurnEffect{turns, dmg}; }
+
+    /** Tick burn at turn start.  Returns damage dealt this tick (0 if not burning). */
+    int tickBurn() {
+        if (!burnEffect.has_value()) return 0;
+        int dmg = burnEffect->damagePerTurn;
+        burnEffect->turnsRemaining--;
+        if (burnEffect->turnsRemaining <= 0) burnEffect.reset();
+        return dmg;
+    }
+
+    void clearBurn() { burnEffect.reset(); }
+
     const Player&   getOwner()      const { return player; }
     UnitType        getType()       const { return type; }
 
@@ -177,8 +226,17 @@ public:
         return dmg;
     }
 
-    void setMoved(bool flag)    { moved    = flag; }
+    void setMoved(bool flag)    { moved = flag; }
     void setAttacked(bool flag) { attacked = flag; }
+
+    // ── Blessing-passive setters (called by BlessingSystem::refreshUnitPassives) ──
+    void setMovBonus(int b)       { movBonus = b; }
+    void setRangeBonus(int b)     { rangeBonus = b; }
+    void setTumble(bool b)        { tumble = b; }
+    void setEndureReady(bool b)   { endureReady = b; }
+    bool hasEndure()         const { return endureReady; }
+    bool hasEndureConsumed() const { return endureConsumed; }
+    void consumeEndure()           { endureReady = false; endureConsumed = true; }
 
     // True when the unit can neither move nor attack this turn.
     bool isExhausted() const { return attacked; }
@@ -226,9 +284,18 @@ private:
 
     const UnitTemplate* tmpl;  // shared flyweight — points to static data in UnitFactory
     int  health;
+    int  currentMagic;
     bool moved;
     bool attacked;
 
+    // Blessing-granted passive bonuses (set by BlessingSystem::refreshUnitPassives)
+    int  movBonus       = 0;     // GALE_SWIFTNESS: +1 movement range
+    int  rangeBonus     = 0;     // GALE_FAR_REACH: +1 attack range
+    bool tumble         = false; // GALE_TUMBLE: may move after attacking
+    bool endureReady    = false; // MARTIAL_ENDURE: survive one lethal blow at 1 HP
+    bool endureConsumed = false; // marks endure as spent (not reset by subsequent refresh)
+
+    std::optional<BurnEffect> burnEffect;
     std::vector<std::shared_ptr<DamageModifier>> modifiers;
 };
 
@@ -258,10 +325,10 @@ public:
 private:
     inline static uint32_t nextId = 0;
 
-    //                                           hp   mov  rng  sgt  str  spc  def  res  prec agi  ini  grd
-    static constexpr UnitTemplate WARRIOR_TMPL = { 50,  2,   1,   3,   4,   1,   3,   1,   4,   2,   2,   4 };
-    static constexpr UnitTemplate SCOUT_TMPL   = { 40,  3,   1,   5,   2,   2,   2,   3,   6,   7,   2,   2 };
-    static constexpr UnitTemplate RANGER_TMPL  = { 35,  3,   3,   4,   3,   1,   1,   2,   6,   5,   3,   2 };
-    static constexpr UnitTemplate CAVALRY_TMPL = { 50,  4,   1,   3,   4,   1,   4,   1,   3,   1,   4,   3 };
-    static constexpr UnitTemplate MAGE_TMPL    = { 25,  2,   2,   2,   1,   5,   0,   3,   5,   3,   4,   1 };
+    //                                           hp   mov  rng  sgt  str  spc  def  res  prec agi  ini  grd  aff
+    static constexpr UnitTemplate WARRIOR_TMPL = { 50,  2,   1,   3,   4,   1,   3,   1,   4,   2,   2,   4,   1 };
+    static constexpr UnitTemplate SCOUT_TMPL   = { 40,  3,   1,   5,   2,   2,   2,   3,   6,   7,   2,   2,   2 };
+    static constexpr UnitTemplate RANGER_TMPL  = { 35,  3,   3,   4,   3,   1,   1,   2,   6,   5,   3,   2,   2 };
+    static constexpr UnitTemplate CAVALRY_TMPL = { 50,  4,   1,   3,   4,   1,   4,   1,   3,   1,   4,   3,   1 };
+    static constexpr UnitTemplate MAGE_TMPL    = { 25,  2,   2,   2,   1,   5,   0,   3,   5,   3,   4,   1,   5 };
 };

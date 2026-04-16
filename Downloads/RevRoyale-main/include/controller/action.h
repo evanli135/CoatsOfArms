@@ -37,7 +37,8 @@ enum class ControllerAction {
     MOV,
     ATT,
     CON,
-    TRN
+    TRN,
+    CAST  // cast a spell from origin unit onto destination unit
 };
 
 /**
@@ -52,7 +53,7 @@ enum class ControllerMode {
     TACTIC,
     TRAINING,
     BUILDING,
-    PRAY        // shrine interaction — receive spirit boons
+    PRAY        // shrine interaction — receive spirit blessings
 };
 
 /**

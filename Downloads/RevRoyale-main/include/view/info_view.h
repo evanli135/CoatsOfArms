@@ -10,7 +10,8 @@ class InformationView {
 public:
     InformationView();
     void render(const World& world,
-                const Position* hoverPos,
+                const Position* viewPos,    // hovered or pinned tile
                 const Position* selectedPos,
-                int panelX, int panelW, int screenH) const;
+                int panelX, int panelW, int screenH,
+                bool isPinned = false) const;
 };

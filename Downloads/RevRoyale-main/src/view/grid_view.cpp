@@ -68,17 +68,22 @@ void GridView::render(const Layout::ViewLayout& layout,
                       const std::vector<Position>& reachable,
                       const std::vector<Position>& attackable,
                       const std::vector<Position>& lethal,
+                      const std::vector<Position>& castable,
                       const std::vector<Position>& path,
                       const std::unordered_set<Position>& visibleTiles,
-                      const std::unordered_set<Position>& buildableTiles)
+                      const std::unordered_set<Position>& buildableTiles,
+                      ControllerMode currentMode)
 {
     gridOrigX_ = layout.gridOrigX;
     gridOrigY_ = layout.gridOrigY;
     std::unordered_set<Position> reachableSet(reachable.begin(), reachable.end());
     std::unordered_set<Position> attackableSet(attackable.begin(), attackable.end());
     std::unordered_set<Position> lethalSet(lethal.begin(), lethal.end());
+    std::unordered_set<Position> castableSet(castable.begin(), castable.end());
 
-    const bool fogActive = !visibleTiles.empty();
+    const bool fogActive   = !visibleTiles.empty();
+    const bool unitsGrayed = (currentMode == ControllerMode::TRAINING ||
+                              currentMode == ControllerMode::BUILDING);
 
     for (int sum = 0; sum < Game::HEIGHT + Game::WIDTH - 1; ++sum) {
         int rMin = std::max(0, sum - (Game::WIDTH  - 1));
@@ -89,14 +94,17 @@ void GridView::render(const Layout::ViewLayout& layout,
             Position pos(row, col);
             bool isFogged    = fogActive && (visibleTiles.count(pos) == 0);
             bool isBuildable = buildableTiles.count(pos) > 0;
+            bool isCastable  = castableSet.count(pos) > 0;
             renderCell(world, pos,
                        hoverPos    && pos == *hoverPos,
                        selectedPos && pos == *selectedPos,
                        reachableSet.count(pos) > 0,
                        attackableSet.count(pos) > 0,
                        lethalSet.count(pos) > 0,
+                       isCastable,
                        isFogged,
-                       isBuildable);
+                       isBuildable,
+                       unitsGrayed);
         }
     }
 
@@ -115,7 +123,7 @@ void GridView::isoTopVertex(int row, int col, int& px, int& py) const {
 
 void GridView::renderTerrainLayer(const Tile& tile, int px, int py) {
     // Texture path not yet adapted for iso diamond rendering — always procedural.
-    Sprites::terrain(tile.getTerrain(), px, py);
+    Sprites::terrain(tile.getTerrain(), tile.getTileResourceValue(), px, py);
 }
 
 void GridView::renderCityBorderLayer(const World& world, const Position& pos, int px, int py) {
@@ -205,7 +213,7 @@ void GridView::renderCityLayer(const Tile& tile, int px, int py) {
                 Color{200, 200, 220, 160});
 }
 
-void GridView::renderUnitLayer(const World& world, const Tile& tile, const Position& pos, int px, int py) {
+void GridView::renderUnitLayer(const World& world, const Tile& tile, const Position& pos, int px, int py, bool unitsGrayed) {
     if (!tile.hasUnit()) return;
     const Unit* u = world.getUnit(tile.getUnit().value());
     if (!u) return;
@@ -223,27 +231,34 @@ void GridView::renderUnitLayer(const World& world, const Tile& tile, const Posit
         }
     }
 
-    Color tint = playerColor(u->getOwner().getId());
-    if (!isCurrentPlayer) {
+    Color tint;
+    if (unitsGrayed) {
+        // In TRAINING / BUILDING mode all units appear grayed and unselectable
+        tint = Color{110, 110, 110, 120};
+    } else if (!isCurrentPlayer) {
         // Enemy units are consistently dimmed
+        tint = playerColor(u->getOwner().getId());
         tint.r = (unsigned char)((tint.r + 40) / 2);
         tint.g = (unsigned char)((tint.g + 40) / 2);
         tint.b = (unsigned char)((tint.b + 40) / 2);
         tint.a = 160;
     } else if (effectivelyDone) {
         // Current player's done units are grayed out
+        tint = playerColor(u->getOwner().getId());
         tint.r = (unsigned char)((tint.r + 80) / 2);
         tint.g = (unsigned char)((tint.g + 80) / 2);
         tint.b = (unsigned char)((tint.b + 80) / 2);
         tint.a = 140;
+    } else {
+        tint = playerColor(u->getOwner().getId());
     }
 
     // Shift unit origin up so the sprite is centred on the tile diamond
     // rather than sitting at the front corner.
     const int unitPy = py - ISO_HALF_H;
 
-    // "Selectable" indicators for current player's active units
-    bool isSelectable = isCurrentPlayer && !effectivelyDone;
+    // "Selectable" indicators for current player's active units — suppressed in grayed modes
+    bool isSelectable = !unitsGrayed && isCurrentPlayer && !effectivelyDone;
     if (isSelectable) {
         float t     = (float)GetTime();
         float pulse = 0.5f + 0.5f * sinf(t * 3.0f);
@@ -279,6 +294,22 @@ void GridView::renderUnitLayer(const World& world, const Tile& tile, const Posit
     float hp = (float)u->getHealth() / (float)u->getMaxHealth();
     Color hpCol = hp >= 0.5f ? Color{200, 230, 200, 220} : Color{230, 70, 70, 230};
     DrawText(TextFormat("%d", u->getHealth()), px - 26, unitPy + 42, 11, hpCol);
+
+    // Burn indicator — pulsing flame orb at top-right of the unit
+    if (u->hasBurn()) {
+        const float ft     = (float)GetTime();
+        const float fpulse = 0.5f + 0.5f * sinf(ft * 5.5f);
+        const int   fx     = px + 14;
+        const int   fy     = unitPy - 4 + (int)(2.0f * sinf(ft * 3.0f));
+
+        // Outer glow
+        unsigned char ga = (unsigned char)(35 + 45 * fpulse);
+        DrawCircle(fx, fy, 10, Color{255, 80, 10, ga});
+        // Flame core (3 concentric circles shrinking upward)
+        DrawCircle(fx, fy,     7, Color{255, 140, 30, (unsigned char)(200 + 55 * fpulse)});
+        DrawCircle(fx, fy - 4, 4, Color{255, 200, 70, 200});
+        DrawCircle(fx, fy - 7, 2, Color{255, 245, 160, 180});
+    }
 }
 
 void GridView::renderHoverLayer(int px, int py) {
@@ -583,7 +614,7 @@ void GridView::drawFogOverlay(int px, int py) {
 }
 
 void GridView::renderCell(const World& world, const Position& pos,
-                          bool isHovered, bool isSelected, bool isReachable, bool isAttackable, bool isLethal, bool isFogged, bool isBuildable) {
+                          bool isHovered, bool isSelected, bool isReachable, bool isAttackable, bool isLethal, bool isCastable, bool isFogged, bool isBuildable, bool unitsGrayed) {
     int px, py;
     isoTopVertex(pos.row(), pos.col(), px, py);
     const Tile& tile = world.getTileAt(pos);
@@ -607,12 +638,13 @@ void GridView::renderCell(const World& world, const Position& pos,
     if (isBuildable)                       renderBuildableTileLayer(px, py);
     if (isReachable)                       renderReachableLayer(px, py, isHovered);
     if (isAttackable)                      renderAttackableLayer(px, py);
+    if (isCastable)                        renderCastableLayer(px, py);
     if (isAttackable && isHovered && !isLethal) renderAttackableRingsLayer(px, py);
     if (isHovered)                         renderHoverLayer(px, py);
     if (isSelected)                        renderSelectionLayer(px, py);
 
     // ── Unit sprite (always on top of tile decorations) ───────────────────────
-    renderUnitLayer(world, tile, pos, px, py);
+    renderUnitLayer(world, tile, pos, px, py, unitsGrayed);
 
     // ── Above-unit overlays ───────────────────────────────────────────────────
     if (isLethal)                          renderLethalLayer(px, py);
@@ -681,4 +713,24 @@ void GridView::renderAttackableLayer(int px, int py) {
     DrawLineEx(rt,  bot, 1.5f, Color{255, 80,  80,  210});
     DrawLineEx(bot, lt,  1.5f, Color{255, 80,  80,  210});
     DrawLineEx(lt,  top, 1.5f, Color{255, 80,  80,  210});
+}
+
+void GridView::renderCastableLayer(int px, int py) {
+    Vector2 top = {(float)px,             (float)py};
+    Vector2 rt  = {(float)(px+ISO_HALF_W),(float)(py+ISO_HALF_H)};
+    Vector2 bot = {(float)px,             (float)(py+ISO_TILE_H)};
+    Vector2 lt  = {(float)(px-ISO_HALF_W),(float)(py+ISO_HALF_H)};
+
+    const float t     = (float)GetTime();
+    const float pulse = 0.5f + 0.5f * sinf(t * 3.5f);
+
+    // Purple fill — slightly more opaque when hovered (handled at call site)
+    unsigned char fa = (unsigned char)(50 + 25 * pulse);
+    DrawTriangle(top, lt, bot, Color{180, 50, 230, fa});
+    DrawTriangle(top, bot, rt, Color{180, 50, 230, fa});
+    // Purple outline
+    DrawLineEx(top, rt,  1.5f, Color{200, 80, 255, (unsigned char)(180 + 70 * pulse)});
+    DrawLineEx(rt,  bot, 1.5f, Color{200, 80, 255, (unsigned char)(180 + 70 * pulse)});
+    DrawLineEx(bot, lt,  1.5f, Color{200, 80, 255, (unsigned char)(180 + 70 * pulse)});
+    DrawLineEx(lt,  top, 1.5f, Color{200, 80, 255, (unsigned char)(180 + 70 * pulse)});
 }

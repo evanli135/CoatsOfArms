@@ -11,6 +11,13 @@ enum class TileModifier {
     ONFIRE
 };
 
+// How resource-rich a tile is.  Buildings on HIGH tiles yield more; LOW tiles yield less.
+enum class TileResourceValue {
+    LOW,    // -1 to building output (min 1)
+    MEDIUM, // base output unchanged
+    HIGH,   //  +2 to building output
+};
+
 enum class Terrain {
     GRASS,
     FOREST,
@@ -96,10 +103,14 @@ public:
     bool hasShrine()      const { return shrine; }
     void setShrine(bool v)      { shrine = v;    }
 
+    TileResourceValue getTileResourceValue() const { return resourceValue; }
+    void setTileResourceValue(TileResourceValue v) { resourceValue = v; }
+
 private:
     Terrain terrain;
     std::optional<UnitId> unit;
     std::optional<BuildingType> tileBuilding;
     std::optional<City> city;
     bool shrine = false;
+    TileResourceValue resourceValue = TileResourceValue::MEDIUM;
 };

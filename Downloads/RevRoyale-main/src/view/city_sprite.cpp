@@ -251,6 +251,35 @@ static void drawLumberCamp(int bx, int by) {
                  blade);
 }
 
+static void drawShrine(int bx, int by) {
+    const Color stone = Color{130, 118, 105, 255};
+    const Color dark  = Color{ 75,  65,  58, 255};
+    const Color edge  = Color{165, 152, 135, 200};
+    const Color orb   = Color{170, 130, 255, 230};
+    const Color orbHi = Color{220, 195, 255, 255};
+    const Color rune  = Color{155, 120, 210, 210};
+
+    // Stone platform
+    DrawRectangle(bx - 6, by - 3, 12, 3, stone);
+    // Pillar body
+    DrawRectangle(bx - 2, by - 15, 5, 12, dark);
+    DrawLine(bx - 2, by - 15, bx - 2, by - 3, edge);
+    // Horizontal mortar bands
+    DrawLine(bx - 2, by - 10, bx + 3, by - 10, Color{100, 90, 80, 160});
+    // Rune glyphs
+    DrawLine(bx - 1, by - 13, bx + 2, by - 13, rune);
+    DrawLine(bx,     by - 13, bx,     by - 11, rune);
+    DrawLine(bx - 1, by -  8, bx + 2, by -  8, rune);
+    // Pillar capital
+    DrawRectangle(bx - 4, by - 16, 9, 2, stone);
+    // Spirit orb glow
+    DrawCircle(bx, by - 22, 6, Color{orb.r, orb.g, orb.b, 55});
+    DrawCircle(bx, by - 22, 4, orb);
+    DrawCircle(bx - 1, by - 23, 2, orbHi);
+    // Tether
+    DrawLine(bx, by - 16, bx, by - 18, Color{rune.r, rune.g, rune.b, 180});
+}
+
 static void drawMine(int bx, int by) {
     const Color stone  = Color{100,  90,  80, 255};
     const Color dark   = Color{ 25,  18,  12, 255};
@@ -289,6 +318,7 @@ void building(BuildingType type, int px, int py, Color factionColor, int slot, i
         case BuildingType::FISHERY:      drawFishery(bx, by);                break;
         case BuildingType::LUMBER_CAMP:  drawLumberCamp(bx, by);             break;
         case BuildingType::MINE:         drawMine(bx, by);                   break;
+        case BuildingType::SHRINE:       drawShrine(bx, by);                 break;
     }
 }
 
@@ -327,6 +357,7 @@ void buildingScaffold(BuildingType type, int px, int py, int turnsLeft, int slot
                  : (type == BuildingType::FISHERY)      ? Color{ 60, 160, 220, 255}
                  : (type == BuildingType::LUMBER_CAMP)  ? Color{160, 110,  50, 255}
                  : (type == BuildingType::MINE)         ? Color{200, 160,  50, 255}
+                 : (type == BuildingType::SHRINE)       ? Color{170, 130, 255, 255}
                  :                                        Color{180, 180, 180, 255};
     DrawCircle(bx, by + 4, 4, typeCol);
 }

@@ -81,8 +81,10 @@ public:
     /** Returns the pending ControllerAction (MOV or ATT), or nullopt if none set. */
     std::optional<ControllerAction> getPendingAction() const override { return pendingAction; }
 
-    /** Returns {"MOV", "ATT"} — the two actions available in TACTIC mode. */
-    std::vector<std::string> getActionLabels() const override { return {"MOVE", "ATTACK"}; }
+    /** Returns {"MOVE", "ATTACK", "CAST"} — the three actions available in TACTIC mode. */
+    std::vector<std::string> getActionLabels() const override { return {"MOVE", "ATTACK", "CAST"}; }
+
+    std::vector<bool> getEnabledActions() const override;
 
 private:
     World& world;

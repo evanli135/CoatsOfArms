@@ -3,6 +3,7 @@
 #include "model/player.h"
 #include "model/city.h"
 #include "model/unit.h"
+#include "model/resource_system.h"
 
 static const UnitType UNIT_TYPES[] = {
     UnitType::WARRIOR, UnitType::SCOUT, UnitType::RANGER,
@@ -73,4 +74,25 @@ void TrainingMode::onDeselect() {
 void TrainingMode::onExit() {
     selection.reset();
     pendingUnitIndex.reset();
+}
+
+std::vector<bool> TrainingMode::getEnabledActions() const {
+    int pid        = player.getId();
+    int ownedUnits = world.countUnitsForPlayer(pid);
+    bool capFull   = ownedUnits >= TrainingSystem::MAX_UNITS_PER_PLAYER;
+
+    // If a city is already selected, check whether it's already training.
+    bool cityBusy = false;
+    if (selection.has_value()) {
+        const City* city = world.getCityAt(*selection);
+        if (city && city->isTraining()) cityBusy = true;
+    }
+
+    std::vector<bool> result;
+    for (auto t : UNIT_TYPES) {
+        int cost       = ResourceSystem::unitFoodCost(t);
+        bool canAfford = world.getAvailableCapacity(pid, ResourceType::FOOD) >= cost;
+        result.push_back(!capFull && canAfford && !cityBusy);
+    }
+    return result;
 }

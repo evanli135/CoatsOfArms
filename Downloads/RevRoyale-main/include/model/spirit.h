@@ -3,9 +3,9 @@
 #include "model/unit.h"   // UnitType
 
 // ---------------------------------------------------------------------------
-// Spirit system — elemental forces that imbue units with boon abilities.
+// Spirit system — elemental forces that imbue units with blessing abilities.
 // Spirits are granted through prayer at shrines scattered across the map.
-// Each shrine interaction offers 3 boon choices; the player picks one.
+// Each shrine interaction offers 3 blessing choices; the player picks one.
 //
 // NOTE: Effects are framework-only — no mechanical implementation yet.
 // ---------------------------------------------------------------------------
@@ -19,15 +19,15 @@ enum class SpiritType {
 
 // One specific mechanical effect — 3 per spirit, 12 total.
 // Effects are defined but not yet wired to game logic.
-enum class BoonEffect {
+enum class BlessingEffect {
     // Flame (index 0–2 within spirit)
     FLAME_SEAR,           // attacks apply a lingering burn debuff
     FLAME_BLAZE_AURA,     // nearby allies deal bonus fire damage
-    FLAME_IGNITE,         // unit gains extra movement after a kill
+    FLAME_IGNITE,         // +10 flat attack damage (Fury)
 
     // Shadow (index 3–5)
     SHADOW_VEIL,          // harder to target through fog of war
-    SHADOW_STEP,          // bonus movement speed after a kill
+    SHADOW_STEP,          // +2 movement range (Stride)
     SHADOW_DARK_STRIKE,   // attacks bypass a portion of enemy defense
 
     // Gale (index 6–8)
@@ -41,11 +41,14 @@ enum class BoonEffect {
     MARTIAL_ENDURE,       // survive a lethal blow at 1 HP once per engagement
 };
 
-// A boon is a (spirit, effect, targetUnit) triple stored per player.
-struct Boon {
-    SpiritType spirit;
-    BoonEffect effect;
-    UnitType   targetUnit;   // which unit class receives the buff
+// A blessing is a (spirit, effect, targetUnit) triple stored per player.
+// If isMagic is true, this blessing also grants the matching spell ability
+// (SpellId index = static_cast<int>(effect)), indicated visually on the card.
+struct Blessing {
+    SpiritType     spirit;
+    BlessingEffect effect;
+    UnitType       targetUnit;   // which unit class receives the buff
+    bool           isMagic = false;
 };
 
 // ---------------------------------------------------------------------------
@@ -62,38 +65,38 @@ inline const char* spiritName(SpiritType s) {
     return "Unknown";
 }
 
-inline const char* boonEffectName(BoonEffect e) {
+inline const char* blessingEffectName(BlessingEffect e) {
     switch (e) {
-        case BoonEffect::FLAME_SEAR:          return "Sear";
-        case BoonEffect::FLAME_BLAZE_AURA:    return "Blaze Aura";
-        case BoonEffect::FLAME_IGNITE:        return "Ignite";
-        case BoonEffect::SHADOW_VEIL:         return "Veil";
-        case BoonEffect::SHADOW_STEP:         return "Shadow Step";
-        case BoonEffect::SHADOW_DARK_STRIKE:  return "Dark Strike";
-        case BoonEffect::GALE_SWIFTNESS:      return "Swiftness";
-        case BoonEffect::GALE_FAR_REACH:      return "Far Reach";
-        case BoonEffect::GALE_TUMBLE:         return "Tumble";
-        case BoonEffect::MARTIAL_IRON_SKIN:   return "Iron Skin";
-        case BoonEffect::MARTIAL_BATTLE_CRY:  return "Battle Cry";
-        case BoonEffect::MARTIAL_ENDURE:      return "Endure";
+        case BlessingEffect::FLAME_SEAR:          return "Sear";
+        case BlessingEffect::FLAME_BLAZE_AURA:    return "Blaze Aura";
+        case BlessingEffect::FLAME_IGNITE:        return "Fury";
+        case BlessingEffect::SHADOW_VEIL:         return "Veil";
+        case BlessingEffect::SHADOW_STEP:         return "Stride";
+        case BlessingEffect::SHADOW_DARK_STRIKE:  return "Dark Strike";
+        case BlessingEffect::GALE_SWIFTNESS:      return "Swiftness";
+        case BlessingEffect::GALE_FAR_REACH:      return "Far Reach";
+        case BlessingEffect::GALE_TUMBLE:         return "Tumble";
+        case BlessingEffect::MARTIAL_IRON_SKIN:   return "Iron Skin";
+        case BlessingEffect::MARTIAL_BATTLE_CRY:  return "Battle Cry";
+        case BlessingEffect::MARTIAL_ENDURE:      return "Endure";
     }
     return "Unknown";
 }
 
-inline const char* boonDescription(BoonEffect e) {
+inline const char* blessingDescription(BlessingEffect e) {
     switch (e) {
-        case BoonEffect::FLAME_SEAR:          return "Attacks leave a burning debuff";
-        case BoonEffect::FLAME_BLAZE_AURA:    return "Nearby allies gain bonus fire damage";
-        case BoonEffect::FLAME_IGNITE:        return "Gain extra movement after a kill";
-        case BoonEffect::SHADOW_VEIL:         return "Harder to target through fog";
-        case BoonEffect::SHADOW_STEP:         return "Gain movement speed after a kill";
-        case BoonEffect::SHADOW_DARK_STRIKE:  return "Bypass a portion of enemy defense";
-        case BoonEffect::GALE_SWIFTNESS:      return "+1 movement range";
-        case BoonEffect::GALE_FAR_REACH:      return "+1 attack range";
-        case BoonEffect::GALE_TUMBLE:         return "May move after attacking";
-        case BoonEffect::MARTIAL_IRON_SKIN:   return "Reduce incoming physical damage";
-        case BoonEffect::MARTIAL_BATTLE_CRY:  return "Adjacent allies gain +attack";
-        case BoonEffect::MARTIAL_ENDURE:      return "Survive a lethal blow at 1 HP once";
+        case BlessingEffect::FLAME_SEAR:          return "Attacks leave a burning debuff";
+        case BlessingEffect::FLAME_BLAZE_AURA:    return "Nearby allies gain bonus fire damage";
+        case BlessingEffect::FLAME_IGNITE:        return "+10 attack damage on all strikes";
+        case BlessingEffect::SHADOW_VEIL:         return "Harder to target through fog";
+        case BlessingEffect::SHADOW_STEP:         return "+2 movement range";
+        case BlessingEffect::SHADOW_DARK_STRIKE:  return "Bypass a portion of enemy defense";
+        case BlessingEffect::GALE_SWIFTNESS:      return "+1 movement range";
+        case BlessingEffect::GALE_FAR_REACH:      return "+1 attack range";
+        case BlessingEffect::GALE_TUMBLE:         return "May move after attacking";
+        case BlessingEffect::MARTIAL_IRON_SKIN:   return "Reduce incoming physical damage";
+        case BlessingEffect::MARTIAL_BATTLE_CRY:  return "Adjacent allies gain +attack";
+        case BlessingEffect::MARTIAL_ENDURE:      return "Survive a lethal blow at 1 HP once";
     }
     return "";
 }
@@ -110,12 +113,12 @@ inline const char* unitTypeName(UnitType u) {
 }
 
 // ---------------------------------------------------------------------------
-// Boon generation
-// Generate 3 distinct-spirit boon choices deterministically from a seed.
+// Blessing generation
+// Generate 3 distinct-spirit blessing choices deterministically from a seed.
 // Called by World::preparePrayChoices(); also usable by tests / UI previews.
 // ---------------------------------------------------------------------------
 
-inline std::array<Boon, 3> generateBoonChoices(int playerId, int turnNumber) {
+inline std::array<Blessing, 3> generateBlessingChoices(int playerId, int turnNumber) {
     // Xorshift32 — deterministic, no stdlib random needed
     unsigned int seed = static_cast<unsigned int>(playerId  * 2654435761u)
                       ^ static_cast<unsigned int>(turnNumber * 40503u + 1234567u);
@@ -141,20 +144,20 @@ inline std::array<Boon, 3> generateBoonChoices(int playerId, int turnNumber) {
     }
 
     // 3 effect buckets per spirit
-    static const BoonEffect flameEffects[]   = { BoonEffect::FLAME_SEAR,
-                                                  BoonEffect::FLAME_BLAZE_AURA,
-                                                  BoonEffect::FLAME_IGNITE };
-    static const BoonEffect shadowEffects[]  = { BoonEffect::SHADOW_VEIL,
-                                                  BoonEffect::SHADOW_STEP,
-                                                  BoonEffect::SHADOW_DARK_STRIKE };
-    static const BoonEffect galeEffects[]    = { BoonEffect::GALE_SWIFTNESS,
-                                                  BoonEffect::GALE_FAR_REACH,
-                                                  BoonEffect::GALE_TUMBLE };
-    static const BoonEffect martialEffects[] = { BoonEffect::MARTIAL_IRON_SKIN,
-                                                  BoonEffect::MARTIAL_BATTLE_CRY,
-                                                  BoonEffect::MARTIAL_ENDURE };
+    static const BlessingEffect flameEffects[]   = { BlessingEffect::FLAME_SEAR,
+                                                      BlessingEffect::FLAME_BLAZE_AURA,
+                                                      BlessingEffect::FLAME_IGNITE };
+    static const BlessingEffect shadowEffects[]  = { BlessingEffect::SHADOW_VEIL,
+                                                      BlessingEffect::SHADOW_STEP,
+                                                      BlessingEffect::SHADOW_DARK_STRIKE };
+    static const BlessingEffect galeEffects[]    = { BlessingEffect::GALE_SWIFTNESS,
+                                                      BlessingEffect::GALE_FAR_REACH,
+                                                      BlessingEffect::GALE_TUMBLE };
+    static const BlessingEffect martialEffects[] = { BlessingEffect::MARTIAL_IRON_SKIN,
+                                                      BlessingEffect::MARTIAL_BATTLE_CRY,
+                                                      BlessingEffect::MARTIAL_ENDURE };
 
-    auto pickEffect = [&](SpiritType s) -> BoonEffect {
+    auto pickEffect = [&](SpiritType s) -> BlessingEffect {
         int i = randN(3);
         switch (s) {
             case SpiritType::FLAME:   return flameEffects[i];
@@ -162,7 +165,7 @@ inline std::array<Boon, 3> generateBoonChoices(int playerId, int turnNumber) {
             case SpiritType::GALE:    return galeEffects[i];
             case SpiritType::MARTIAL: return martialEffects[i];
         }
-        return BoonEffect::FLAME_SEAR;
+        return BlessingEffect::FLAME_SEAR;
     };
 
     static const UnitType UNIT_TYPES[] = {
@@ -170,9 +173,10 @@ inline std::array<Boon, 3> generateBoonChoices(int playerId, int turnNumber) {
         UnitType::CAVALRY, UnitType::MAGE
     };
 
-    std::array<Boon, 3> choices;
+    std::array<Blessing, 3> choices;
     for (int i = 0; i < 3; ++i) {
-        choices[i] = Boon{ spirits[i], pickEffect(spirits[i]), UNIT_TYPES[randN(5)] };
+        bool magic = (randN(10) < 4);   // 40% chance this card is also a magic ability
+        choices[i] = Blessing{ spirits[i], pickEffect(spirits[i]), UNIT_TYPES[randN(5)], magic };
     }
     return choices;
 }

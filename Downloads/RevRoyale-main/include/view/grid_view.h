@@ -2,6 +2,7 @@
 #include <optional>
 #include <unordered_set>
 #include "raylib.h"
+#include "controller/action.h"
 #include "model/world.h"
 #include "model/tile.h"
 #include "model/unit.h"
@@ -20,15 +21,19 @@ public:
     ~GridView();
 
     /** Render the full grid for one frame.
-     *  visibleTiles: positions the current player can see. Empty = fog disabled. */
+     *  visibleTiles: positions the current player can see. Empty = fog disabled.
+     *  castable:     enemy positions the selected unit can target with CAST action.
+     *  currentMode:  units are grayed/unselectable in TRAINING and BUILDING modes. */
     void render(const Layout::ViewLayout& layout,
                 const World& world, const Position* hoverPos, const Position* selectedPos,
                 const std::vector<Position>& reachable      = {},
                 const std::vector<Position>& attackable     = {},
                 const std::vector<Position>& lethal         = {},
+                const std::vector<Position>& castable       = {},
                 const std::vector<Position>& path           = {},
                 const std::unordered_set<Position>& visibleTiles   = {},
-                const std::unordered_set<Position>& buildableTiles = {});
+                const std::unordered_set<Position>& buildableTiles = {},
+                ControllerMode currentMode = ControllerMode::TACTIC);
 
     /** Pan the camera by (dpx, dpy) pixels, clamped to map bounds. */
     void scrollBy(int dpx, int dpy);
@@ -64,18 +69,19 @@ private:
     std::optional<Texture2D> terrainSprites[5];  // indexed by (int)Terrain
     std::optional<Texture2D> unitSprites[5];     // indexed by (int)UnitType
 
-    void renderCell(const World& world, const Position& pos, bool isHovered, bool isSelected, bool isReachable, bool isAttackable, bool isLethal, bool isFogged, bool isBuildable);
+    void renderCell(const World& world, const Position& pos, bool isHovered, bool isSelected, bool isReachable, bool isAttackable, bool isLethal, bool isCastable, bool isFogged, bool isBuildable, bool unitsGrayed);
     void drawFogOverlay(int px, int py);
     void renderTerrainLayer(const Tile& tile, int px, int py);
     void renderCityBorderLayer(const World& world, const Position& pos, int px, int py);
     void renderBuildableTileLayer(int px, int py);
     void renderCityLayer(const Tile& tile, int px, int py);
     void renderBuildingLayer(const World& world, const Position& pos, int px, int py);
-    void renderUnitLayer(const World& world, const Tile& tile, const Position& pos, int px, int py);
+    void renderUnitLayer(const World& world, const Tile& tile, const Position& pos, int px, int py, bool unitsGrayed);
     void renderHoverLayer(int px, int py);
     void renderSelectionLayer(int px, int py);
     void renderReachableLayer(int px, int py, bool isHovered);
     void renderAttackableLayer(int px, int py);
+    void renderCastableLayer(int px, int py);          // purple overlay for cast targets
     void renderAttackableRingsLayer(int px, int py);   // falling rings (drawn before unit)
     void renderLethalLayer(int px, int py);
     void renderAttackableHoverLayer(int px, int py);   // crossing swords (drawn after unit)

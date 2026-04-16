@@ -1,15 +1,18 @@
 #pragma once
+#include <array>
 #include <optional>
 #include <string>
 #include <vector>
 #include "controller/action.h"
 #include "controller/error.h"
 #include "controller/observer.h"
+#include "model/spirit.h"
 #include "model/world.h"
 #include "model/util.h"
 #include "view/damage_indicators.h"
 #include "view/explosion.h"
 #include "view/layout.h"
+#include "view/spirit_overlay.h"
 
 // Sub-views are owned by GUI via pointers; headers included in gui.cpp.
 class GridView;
@@ -25,13 +28,17 @@ public:
     GUI(int width, int height);
     ~GUI();
 
-    /** Render the full frame. */
+    /** Render the full frame.
+     *  blessingChoices: pass the pending blessing options when in PRAY mode phase 2
+     *  so the spirit selection overlay is shown. */
     void render(const World& world,
                 const Position& hoverPos,
                 const Position* selectedPos,
                 const std::vector<std::string>& actionLabels,
                 ControllerMode currentMode,
-                int pendingActionIndex = -1);
+                const std::vector<bool>& enabledActions = {},
+                int pendingActionIndex = -1,
+                const std::optional<std::array<Blessing, 3>>& blessingChoices = std::nullopt);
 
     /** Resolve a left-click to a ClickTarget.  Priority: grid > action > mode. */
     std::optional<ClickTarget> pollClick(const std::vector<std::string>& actionLabels);
@@ -46,6 +53,9 @@ public:
 
     /** Pan the grid viewport by (dpx, dpy) pixels. */
     void scrollGrid(int dpx, int dpy);
+
+    /** Pin the info panel to a specific tile (set on click, cleared on right-click). */
+    void clearPinnedPos();
 
     /**
      * Click-and-drag on the map (outside chrome) pans the grid.
@@ -76,6 +86,10 @@ private:
 
     DamageIndicatorSystem damageIndicators;
     ExplosionSystem       explosions;
+    SpiritOverlay         spiritOverlay_;
+
+    // Cached from the last render() call so pollClick() can hit-test cards.
+    std::optional<std::array<Blessing, 3>> currentBlessingChoices_;
 
     // Turn-change banner
     float turnBannerAge      = 999.0f;
@@ -96,6 +110,7 @@ private:
     Camera2D mapCamera() const;
 
     float mapZoom_ = 1.0f;
+    std::optional<Position> pinnedPos_;
 
     enum class MapDragPhase { None, Armed, Panning };
     MapDragPhase mapDragPhase_      = MapDragPhase::None;

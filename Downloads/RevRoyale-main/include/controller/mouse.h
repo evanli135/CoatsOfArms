@@ -1,9 +1,11 @@
 #pragma once
 
+#include <array>
 #include <memory>
 #include <optional>
 #include "controller/mode_handler.h"
 #include "controller/observer.h"
+#include "model/spirit.h"
 #include "model/util.h"
 #include "controller/error.h"
 
@@ -140,13 +142,19 @@ public:
      * Delegates to mode->getActionLabels(). Pass to GUI::pollClick() and
      * GUI::render() each frame so the view knows what buttons to display.
      */
-    std::vector<std::string> getActionLabels() const { return mode->getActionLabels(); }
+    std::vector<std::string> getActionLabels()  const { return mode->getActionLabels(); }
+    std::vector<bool>        getEnabledActions() const { return mode->getEnabledActions(); }
 
     /** Returns true if it is currently this player's turn. */
     bool isMyTurn() const { return myTurn; }
 
     /** Returns the currently active ControllerMode. */
     ControllerMode getCurrentMode() const { return currentMode; }
+
+    /** Returns the three pending blessing choices when in PRAY mode phase 2, else nullopt. */
+    std::optional<std::array<Blessing, 3>> getPendingBlessingChoices() const {
+        return mode->getPendingBlessingChoices();
+    }
 
     /**
      * Updates the stored hover position.

@@ -91,12 +91,26 @@ std::optional<PlayerError> ConstructCommand::execute(World& world) {
 
 void ConstructCommand::undo(World& world) {
     // Remove the construction queue entry; capacity is freed automatically.
-    auto& q = world.constructionQueue;
-    for (auto it = q.begin(); it != q.end(); ++it) {
-        if (it->pos == tilePos && it->type == buildingType
-            && it->ownerPlayerId == player.getId()) {
-            q.erase(it);
-            return;
+    world.cancelConstruction(tilePos, buildingType, player.getId());
+}
+
+
+// ---------------------------------------------------------------------------
+// CastCommand
+// ---------------------------------------------------------------------------
+
+std::optional<PlayerError> CastCommand::execute(World& world) {
+    return world.magicSystem.castSpell(casterPos, targetPos, spell, player);
+}
+
+void CastCommand::undo(World& world) {
+    if (Unit* caster = world.getUnitAt(casterPos)) {
+        caster->setMagic(casterMagicBefore);
+        caster->setAttacked(false);
+    }
+    if (!targetWasBurning) {
+        if (Unit* target = world.getUnitAt(targetPos)) {
+            target->clearBurn();
         }
     }
 }

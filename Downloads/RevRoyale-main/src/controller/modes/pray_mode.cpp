@@ -23,9 +23,9 @@ std::optional<PlayerError> PrayMode::selectUnit(Position pos) {
     // Unit must be adjacent to (or on) a shrine
     if (!world.isAdjacentToShrine(pos)) return PlayerError::INVALIDTARGET;
 
-    // Generate and cache the boon choices
-    selection    = pos;
-    boonChoices  = world.preparePrayChoices(pos, player);
+    // Generate and cache the blessing choices
+    selection       = pos;
+    blessingChoices = world.preparePrayChoices(pos, player);
     return std::nullopt;
 }
 
@@ -35,17 +35,17 @@ std::optional<PlayerError> PrayMode::onTileSelect(Position pos) {
     }
     // Clicking a tile in phase 2 just re-selects origin
     selection.reset();
-    boonChoices.reset();
+    blessingChoices.reset();
     world.clearPendingPrayChoices(player.getId());
     return selectUnit(pos);
 }
 
 // ---------------------------------------------------------------------------
-// Phase 2 — choose one of the 3 boons
+// Phase 2 — choose one of the 3 blessings
 // ---------------------------------------------------------------------------
 
 std::optional<PlayerError> PrayMode::onActionButton(int index) {
-    if (!selection.has_value() || !boonChoices.has_value())
+    if (!selection.has_value() || !blessingChoices.has_value())
         return PlayerError::INVALIDTARGET;
     if (index < 0 || index >= 3)
         return PlayerError::NOTSUPPORTED;
@@ -53,7 +53,7 @@ std::optional<PlayerError> PrayMode::onActionButton(int index) {
     auto result = world.completePray(*selection, index, player);
     if (!result.has_value()) {
         selection.reset();
-        boonChoices.reset();
+        blessingChoices.reset();
     }
     return result;
 }
@@ -64,7 +64,7 @@ void PrayMode::onDeselect() {
     if (selection.has_value())
         world.clearPendingPrayChoices(player.getId());
     selection.reset();
-    boonChoices.reset();
+    blessingChoices.reset();
 }
 
 void PrayMode::onExit() {
@@ -72,7 +72,7 @@ void PrayMode::onExit() {
 }
 
 std::vector<std::string> PrayMode::getActionLabels() const {
-    if (!boonChoices.has_value()) {
+    if (!blessingChoices.has_value()) {
         // Phase 1: hint labels (up to 3 informational slots)
         return {
             "Select unit",
@@ -81,8 +81,8 @@ std::vector<std::string> PrayMode::getActionLabels() const {
         };
     }
 
-    // Phase 2: show the 3 generated boon names
-    const auto& c = *boonChoices;
+    // Phase 2: show the 3 generated blessing names
+    const auto& c = *blessingChoices;
     std::vector<std::string> labels;
     labels.reserve(3);
     for (int i = 0; i < 3; ++i) {
@@ -90,7 +90,7 @@ std::vector<std::string> PrayMode::getActionLabels() const {
         char buf[64];
         std::snprintf(buf, sizeof(buf), "%s: %s (%s)",
                       spiritName(c[i].spirit),
-                      boonEffectName(c[i].effect),
+                      blessingEffectName(c[i].effect),
                       unitTypeName(c[i].targetUnit));
         labels.push_back(buf);
     }

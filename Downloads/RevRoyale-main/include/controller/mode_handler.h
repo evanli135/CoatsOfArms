@@ -1,11 +1,13 @@
 #pragma once
 
+#include <array>
 #include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 #include "controller/action.h"
 #include "controller/error.h"
+#include "model/spirit.h"
 #include "model/util.h"
 
 class World;
@@ -113,6 +115,14 @@ public:
     virtual std::optional<int> getPendingButtonIndex() const { return std::nullopt; }
 
     /**
+     * Returns the three pending blessing choices when in PRAY mode phase 2,
+     * otherwise nullopt.  Default returns nullopt; PrayMode overrides.
+     */
+    virtual std::optional<std::array<Blessing, 3>> getPendingBlessingChoices() const {
+        return std::nullopt;
+    }
+
+    /**
      * Returns the display labels for this mode's action buttons, in index order.
      *
      * The view calls this to know what buttons to render in the ActionView and
@@ -123,6 +133,13 @@ public:
      * @return  Ordered list of button label strings (e.g. {"MOV", "ATT"}).
      */
     virtual std::vector<std::string> getActionLabels() const = 0;
+
+    /**
+     * Returns a per-button enabled mask for the current game state.
+     * true = available (green), false = unavailable (red).
+     * An empty vector means all buttons are enabled.
+     */
+    virtual std::vector<bool> getEnabledActions() const { return {}; }
 };
 
 /**

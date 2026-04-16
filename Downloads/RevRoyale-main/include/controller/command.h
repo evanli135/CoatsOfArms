@@ -7,6 +7,7 @@
 #include "model/unit.h"
 #include "model/player.h"
 #include "model/economy.h"
+#include "model/magic.h"
 
 class World;
 
@@ -131,4 +132,34 @@ private:
     Position     tilePos;   // the border tile where the building will be placed
     BuildingType buildingType;
     Player       player;
+};
+
+
+// ---------------------------------------------------------------------------
+// CastCommand
+// Casts a spell from casterPos onto targetPos.
+// Undo restores the caster's magic, un-exhausts the caster, and clears the
+// burn if the target wasn't already burning before the cast.
+// ---------------------------------------------------------------------------
+
+class CastCommand : public GameCommand {
+public:
+    CastCommand(Position casterPos, Position targetPos,
+                SpellId spell, Player player,
+                int casterMagicBefore, bool targetWasBurning)
+        : casterPos(casterPos), targetPos(targetPos),
+          spell(spell), player(player),
+          casterMagicBefore(casterMagicBefore),
+          targetWasBurning(targetWasBurning) {}
+
+    std::optional<PlayerError> execute(World& world) override;
+    void undo(World& world) override;
+
+private:
+    Position casterPos, targetPos;
+    SpellId  spell;
+    Player   player;
+
+    int  casterMagicBefore;   // saved to restore on undo
+    bool targetWasBurning;    // if true, undo does not clear the burn
 };

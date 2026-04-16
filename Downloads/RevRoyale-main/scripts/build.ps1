@@ -10,6 +10,13 @@ $SRC = @(
     "src/model/world/world.cpp",
     "src/model/world/movement.cpp",
     "src/model/world/battle.cpp",
+    "src/model/world/training.cpp",
+    "src/model/world/resource_system.cpp",
+    "src/model/world/construction_system.cpp",
+    "src/model/world/spirit_system.cpp",
+    "src/model/world/magic_system.cpp",
+    "src/model/unit/unit.cpp",
+    "src/model/world/tile.cpp",
     # View — grid
     "src/view/gui.cpp",
     "src/view/grid_view.cpp",
@@ -24,6 +31,7 @@ $SRC = @(
     # View — effects
     "src/view/damage_indicators.cpp",
     "src/view/explosion.cpp",
+    "src/view/audio.cpp",
     # View — legacy TUI (kept for reference)
     "src/view/tui/tui.cpp",
     # Controller
@@ -33,7 +41,10 @@ $SRC = @(
     "src/controller/mode_handler.cpp",
     "src/controller/modes/tactic_mode.cpp",
     "src/controller/modes/training_mode.cpp",
-    "src/controller/modes/building_mode.cpp"
+    "src/controller/modes/building_mode.cpp",
+    "src/controller/modes/pray_mode.cpp",
+    # View — spirit overlay
+    "src/view/spirit_overlay.cpp"
 )
 
 $OUT = "bin/revroyale.exe"

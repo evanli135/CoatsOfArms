@@ -73,10 +73,10 @@ public:
     /** Always returns nullopt — BUILDING mode does not use a pending ControllerAction. */
     std::optional<ControllerAction> getPendingAction() const override { return std::nullopt; }
 
-    /** Returns all constructable building types. */
-    std::vector<std::string> getActionLabels() const override {
-        return {"Foundry", "Barrack", "Farm (grass)", "Fishery (water)", "Lumber Camp (forest)", "Mine (mountain)"};
-    }
+    /** Returns labels with cost on line 1 and terrain hint / disable reason on line 2. */
+    std::vector<std::string> getActionLabels() const override;
+
+    std::vector<bool> getEnabledActions() const override;
 
 private:
     World& world;

@@ -4,6 +4,8 @@
 #include "view/sprites.h"
 #include "view/layout.h"
 #include "view/fog.h"
+#include "view/audio.h"
+#include "view/spirit_overlay.h"
 #include "model/util.h"
 #include "raylib.h"
 #include <algorithm>
@@ -71,9 +73,16 @@ void GUI::render(const World& world,
                  const Position* selectedPos,
                  const std::vector<std::string>& actionLabels,
                  ControllerMode currentMode,
-                 int pendingActionIndex)
+                 const std::vector<bool>& enabledActions,
+                 int pendingActionIndex,
+                 const std::optional<std::array<Blessing, 3>>& blessingChoices)
 {
     updateLayout();
+
+    // Cache for pollClick() (called before render() in the same frame, so
+    // this updates it one frame ahead of when it's first needed — acceptable
+    // because blessing choices persist across many frames).
+    currentBlessingChoices_ = blessingChoices;
 
     ClearBackground(Color{16, 16, 26, 255});
 
@@ -82,34 +91,30 @@ void GUI::render(const World& world,
     DrawText(TextFormat("Player %d  |  Turn %d", cp+1, world.getTurn()),
              screenWidth/2 - 80, 16, 16, playerColor(cp));
 
-    // Compute movement reach and attackable tiles for the selected unit
+    // Compute movement reach, attackable, lethal, castable, and path for the selected unit
     std::vector<Position> reachable;
     std::vector<Position> attackable;
     std::vector<Position> lethal;
+    std::vector<Position> castable;
     std::vector<Position> path;
-    std::vector<bool>     enabledActions(actionLabels.size(), true);
 
     if (selectedPos && world.hasUnitAt(*selectedPos)) {
         const Unit* selUnit = world.getUnitAt(*selectedPos);
         if (selUnit) {
             reachable  = world.getMovementSnapshot(*selectedPos);
             attackable = world.getAttackSnapshot(*selectedPos);
-            // Mark which attackable tiles are one-shot kills
             for (const auto& apos : attackable) {
                 if (world.getCombatForecast(*selectedPos, apos).lethal)
                     lethal.push_back(apos);
             }
-            // Path from selected unit to hovered tile (only when hovering a reachable tile)
-            {
-                std::unordered_set<Position> reachSet(reachable.begin(), reachable.end());
-                if (reachSet.count(hoverPos) && hoverPos != *selectedPos)
-                    path = world.getPath(*selectedPos, hoverPos);
+            // Only compute castable when CAST action is explicitly selected (button index 2)
+            if (pendingActionIndex == 2) {
+                castable = world.getCastablePositions(
+                    *selectedPos, world.getCurrentPlayer(), SpellId::SEAR);
             }
-            // Index 0 = MOV, index 1 = ATT in tactic mode
-            if (currentMode == ControllerMode::TACTIC) {
-                if (actionLabels.size() > 0) enabledActions[0] = selUnit->canMove();
-                if (actionLabels.size() > 1) enabledActions[1] = selUnit->canAttack();
-            }
+            std::unordered_set<Position> reachSet(reachable.begin(), reachable.end());
+            if (reachSet.count(hoverPos) && hoverPos != *selectedPos)
+                path = world.getPath(*selectedPos, hoverPos);
         }
     }
 
@@ -137,8 +142,8 @@ void GUI::render(const World& world,
         }
 
         gridView->render(frameLayout_, world, &hoverPos, selectedPos,
-                         reachable, attackable, lethal, path,
-                         visibleTiles, buildableTiles);
+                         reachable, attackable, lethal, castable, path,
+                         visibleTiles, buildableTiles, currentMode);
 
         damageIndicators.update(GetFrameTime());
         damageIndicators.render();
@@ -161,9 +166,15 @@ void GUI::render(const World& world,
         Sprites::modeIcon(MODES[i], r.x, r.y, ICON_SIZE, static_cast<int>(currentMode) == i);
     }
 
-    // Action buttons (left panel)
-    DrawText("ACTIONS", frameLayout_.actX, frameLayout_.actBtnY - 20, 14, Color{160, 160, 180, 255});
-    actionView->render(actionLabels, actionButtonSlots, pendingActionIndex, enabledActions);
+    // Action buttons (left panel) — suppressed when spirit overlay is active
+    if (!currentBlessingChoices_.has_value()) {
+        DrawText("ACTIONS", frameLayout_.actX, frameLayout_.actBtnY - 20, 14, Color{160, 160, 180, 255});
+        actionView->render(actionLabels, actionButtonSlots, pendingActionIndex, enabledActions);  // NOLINT
+    } else {
+        DrawText("PRAY MODE", frameLayout_.actX, frameLayout_.actBtnY - 20, 14, Color{175, 110, 255, 220});
+        DrawText("Choose a spirit", frameLayout_.actX, frameLayout_.actBtnY + 6,  12, Color{155, 155, 175, 190});
+        DrawText("from the cards.", frameLayout_.actX, frameLayout_.actBtnY + 22, 12, Color{155, 155, 175, 190});
+    }
 
     // Info panel (right panel) — shows pinned tile when set, otherwise hovered tile
     const Position* infoPos = pinnedPos_.has_value() ? &*pinnedPos_ : &hoverPos;
@@ -283,13 +294,22 @@ void GUI::render(const World& world,
                  Color{230, 230, 210, a});
     }
 
+    // Spirit blessing selection overlay — drawn last so it sits above everything
+    if (currentBlessingChoices_.has_value()) {
+        spiritOverlay_.render(*currentBlessingChoices_, screenWidth, screenHeight);
+    }
+
     DrawFPS(10, 10);
 }
 
 bool GUI::pollEndTurn() {
     updateLayout();
     if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) return false;
-    return endTurnButton.contains(GetMouseX(), GetMouseY());
+    if (endTurnButton.contains(GetMouseX(), GetMouseY())) {
+        AudioManager::get().playClick();
+        return true;
+    }
+    return false;
 }
 
 bool GUI::isOverChrome(int mx, int my) const {
@@ -374,6 +394,17 @@ std::optional<ClickTarget> GUI::pollClick(const std::vector<std::string>& action
     updateLayout();
     int mx = GetMouseX(), my = GetMouseY();
 
+    // Spirit overlay consumes all clicks when active; only card hits pass through.
+    if (currentBlessingChoices_.has_value()) {
+        if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+            mapDragPhase_ = MapDragPhase::None;  // discard any stale drag
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            if (auto hit = spiritOverlay_.hitTest(mx, my, screenWidth, screenHeight))
+                return ClickTarget{*hit};
+        }
+        return std::nullopt;
+    }
+
     // Tile clicks are deferred to release so drag-pan does not select/move.
     if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
         std::optional<ClickTarget> tileClick;
@@ -391,11 +422,19 @@ std::optional<ClickTarget> GUI::pollClick(const std::vector<std::string>& action
     if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
         return std::nullopt;
 
-    for (int i = 0; i < (int)actionLabels.size() && i < (int)actionButtonSlots.size(); ++i)
-        if (actionButtonSlots[i].contains(mx, my)) return ClickTarget{i};
+    for (int i = 0; i < (int)actionLabels.size() && i < (int)actionButtonSlots.size(); ++i) {
+        if (actionButtonSlots[i].contains(mx, my)) {
+            AudioManager::get().playClick();
+            return ClickTarget{i};
+        }
+    }
 
-    for (int i = 0; i < (int)modeButtonSlots.size(); ++i)
-        if (modeButtonSlots[i].contains(mx, my)) return ClickTarget{static_cast<ControllerMode>(i)};
+    for (int i = 0; i < (int)modeButtonSlots.size(); ++i) {
+        if (modeButtonSlots[i].contains(mx, my)) {
+            AudioManager::get().playClick();
+            return ClickTarget{static_cast<ControllerMode>(i)};
+        }
+    }
 
     // Map / empty area: pollMapPan() arms drag; actual tile click on release above.
     return std::nullopt;

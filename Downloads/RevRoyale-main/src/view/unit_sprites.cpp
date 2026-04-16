@@ -170,10 +170,10 @@ void modeIcon(ControllerMode mode, int ix, int iy, int sz, bool active) {
     int cy = iy + sz / 2;
     Color ico = active ? WHITE : Color{175, 178, 200, 255};
     Color acc = active ? Color{212, 170, 55, 255} : Color{140, 115, 42, 200};
-    Color bg  = active ? Color{72, 108, 185, 255} : Color{35, 35, 52, 255};
+    Color bg  = active ? Color{35, 130, 55, 255} : Color{35, 35, 52, 255};
 
     DrawRectangle(ix, iy, sz, sz, bg);
-    DrawRectangleLines(ix, iy, sz, sz, active ? Color{150, 180, 255, 255} : Color{70, 72, 95, 255});
+    DrawRectangleLines(ix, iy, sz, sz, active ? Color{80, 210, 100, 255} : Color{70, 72, 95, 255});
 
     switch (mode) {
         case ControllerMode::TACTIC: {

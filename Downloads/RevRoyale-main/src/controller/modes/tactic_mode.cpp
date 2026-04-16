@@ -2,6 +2,7 @@
 #include "model/world.h"
 #include "model/player.h"
 #include "model/unit.h"
+#include "model/magic.h"
 
 TacticMode::TacticMode(World& world, const Player& player)
     : world(world), player(player) {}
@@ -56,7 +57,7 @@ std::optional<PlayerError> TacticMode::selectDestination(Position pos) {
 
     if (!result.has_value()) {
         // After a move the unit is now at `pos`, not at *selection (origin).
-        // After an attack the unit stays at *selection.
+        // After an attack or cast the unit stays at *selection.
         bool wasMov = pendingAction.has_value() &&
                       (*pendingAction == ControllerAction::MOV);
         pendingAction.reset();
@@ -80,13 +81,14 @@ std::optional<PlayerError> TacticMode::selectDestination(Position pos) {
 }
 
 // Set the pending action via an action button. Requires a unit to be selected first.
-// index 0 = MOV, index 1 = ATT
+// index 0 = MOV, index 1 = ATT, index 2 = CAST
 std::optional<PlayerError> TacticMode::onActionButton(int index) {
     if (!selection.has_value()) return PlayerError::INVALIDTARGET;
 
     switch (index) {
-        case 0: pendingAction = ControllerAction::MOV; return std::nullopt;
-        case 1: pendingAction = ControllerAction::ATT; return std::nullopt;
+        case 0: pendingAction = ControllerAction::MOV;  return std::nullopt;
+        case 1: pendingAction = ControllerAction::ATT;  return std::nullopt;
+        case 2: pendingAction = ControllerAction::CAST; return std::nullopt;
         default: return PlayerError::NOTSUPPORTED;
     }
 }
@@ -99,4 +101,12 @@ void TacticMode::onDeselect() {
 void TacticMode::onExit() {
     selection.reset();
     pendingAction.reset();
+}
+
+std::vector<bool> TacticMode::getEnabledActions() const {
+    if (!selection.has_value()) return {};  // no unit selected — default all enabled
+    const Unit* u = world.getUnitAt(*selection);
+    if (!u) return {};
+    bool canCast = world.canCast(*selection, SpellId::SEAR, player);
+    return { u->canMove(), u->canAttack(), canCast };
 }

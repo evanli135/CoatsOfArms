@@ -12,8 +12,9 @@
 // ---------------------------------------------------------------------------
 namespace Sprites {
 
-    /** Draw a 64×64 terrain tile at top-left pixel (px, py). */
-    void terrain(Terrain t, int px, int py);
+    /** Draw a 64×64 terrain tile at top-left pixel (px, py).
+     *  rv controls visual richness variation (LOW/MEDIUM/HIGH). */
+    void terrain(Terrain t, TileResourceValue rv, int px, int py);
 
     /** Draw a unit silhouette at (px, py) tinted by player color.
      *  For a drop shadow, call first with a dark/translucent tint at (+1, +2). */

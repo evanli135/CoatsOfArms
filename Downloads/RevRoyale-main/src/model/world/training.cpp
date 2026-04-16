@@ -1,6 +1,7 @@
 #include "model/world.h"
 #include "model/city.h"
 #include "model/unit.h"
+#include "model/construction_system.h"
 #include "controller/error.h"
 
 // ---------------------------------------------------------------------------
@@ -21,8 +22,17 @@ std::optional<PlayerError> TrainingSystem::beginTraining(
     if (city->isTraining())
         return PlayerError::UNITCANTMOVE;   // city already has a training order
 
+    // A city can only produce one thing at a time: block training if a
+    // building is already queued for this city.
+    if (world.constructionSystem.cityHasActiveConstruction(cityPos))
+        return PlayerError::UNITCANTMOVE;
+
     if (countUnitsForPlayer(player.getId()) >= MAX_UNITS_PER_PLAYER)
         return PlayerError::UNITCANTMOVE;   // unit cap reached
+
+    int foodCost = ResourceSystem::unitFoodCost(type);
+    if (world.getAvailableCapacity(player.getId(), ResourceType::FOOD) < foodCost)
+        return PlayerError::INSUFFICIENTRESOURCES;
 
     city->startTraining(type, player.getId(), 2);
     world.notifyObservers(TrainingStartedEvent{type, player.getId(), cityPos});
