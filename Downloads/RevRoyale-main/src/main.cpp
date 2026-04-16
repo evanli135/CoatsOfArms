@@ -38,6 +38,31 @@ int main() {
     while (!WindowShouldClose()) {
         if (IsKeyPressed(KEY_Q)) break;
 
+        // If the game has ended, show the win screen and skip all gameplay input.
+        if (model.isOver()) {
+            BeginDrawing();
+            ClearBackground(BLACK);
+
+            int w = GetScreenWidth(), h = GetScreenHeight();
+            int winnerId = model.getWinnerId();
+            const char* winLine  = (winnerId == 0) ? "PLAYER 1 WINS!" : "PLAYER 2 WINS!";
+            const char* subLine  = (winnerId == 0)
+                ? "Ironhaven has fallen to Player 1."
+                : "Stonekeep has fallen to Player 2.";
+
+            int bigFont  = 90;
+            int smFont   = 28;
+            DrawText(winLine, (w - MeasureText(winLine, bigFont)) / 2, h / 2 - 80,
+                     bigFont, Color{255, 210, 40, 255});
+            DrawText(subLine, (w - MeasureText(subLine, smFont)) / 2, h / 2 + 30,
+                     smFont, Color{200, 200, 200, 255});
+            DrawText("Press Q to quit",
+                     (w - MeasureText("Press Q to quit", smFont)) / 2, h / 2 + 80,
+                     smFont, Color{150, 150, 150, 255});
+            EndDrawing();
+            continue;
+        }
+
         Controller& active = controller1.isMyTurn() ? controller1 : controller2;
 
         // --- Arrow key grid scroll (continuous) ---

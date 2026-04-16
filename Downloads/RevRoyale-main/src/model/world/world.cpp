@@ -390,6 +390,12 @@ void World::battle(const Position& attackerPos, const Position& defenderPos) {
     CombatContext ctx = battleSystem.computeCombatContext(attackerPos, defenderPos);
     int dmg = std::max(1, attacker->computeDamageAgainst(*defender) + ctx.netModifier());
     defender->lowerHP(dmg);
+
+    // Shadow Pounce: the modifier boosted this strike — now drop the cloak.
+    if (attacker->isShadowCloaked()) {
+        attacker->clearShadowPounce();
+    }
+
     attacker->setAttacked(true);
     notifyObservers(DamageDealtEvent{defenderPos, dmg});
 
@@ -554,33 +560,37 @@ World WorldFactory::create(WorldLayout layout, std::vector<Player> players) {
             set(10, 9, Terrain::FOREST);
 
             // Fringe bands
-            set(0, 11, Terrain::FOREST); set(1, 12, Terrain::FOREST); set(2, 13, Terrain::FOREST);
+            // (2,13) intentionally omitted — Ironhaven city center sits there)
+            set(0, 11, Terrain::FOREST); set(1, 12, Terrain::FOREST);
             set(11, 13, Terrain::FOREST); set(12, 12, Terrain::FOREST); set(13, 11, Terrain::FOREST);
             set(13, 3, Terrain::MOUNTAIN); set(12, 0, Terrain::MOUNTAIN); set(11, 1, Terrain::MOUNTAIN);
             set(0, 4, Terrain::RIVER); set(1, 1, Terrain::RIVER);
             set(10, 11, Terrain::RIVER); set(11, 10, Terrain::RIVER); set(12, 9, Terrain::RIVER);
 
-            // Mountain near Ironhaven (within Chebyshev-2 border of city at 1,11)
+            // Mountain near Ironhaven — within Chebyshev-2 border of city at (2,11)
             set(0, 12, Terrain::MOUNTAIN);
 
-            // Units
-            world.addUnit(Position(4, 3), UnitFactory::create(UnitType::WARRIOR, players[0]));
-            world.addUnit(Position(5, 6), UnitFactory::create(UnitType::MAGE,    players[0]));
-            world.addUnit(Position(8, 4), UnitFactory::create(UnitType::SCOUT,   players[1]));
-            world.addUnit(Position(7, 8), UnitFactory::create(UnitType::RANGER,  players[1]));
-            world.addUnit(Position(9, 6), UnitFactory::create(UnitType::CAVALRY, players[1]));
+            // Forest cluster near Stonekeep — within Chebyshev-2 border of city at (11,2)
+            set(11, 3, Terrain::FOREST); set(11, 4, Terrain::FOREST);
+            set(12, 4, Terrain::FOREST);
 
-            // Cities
+            // Units — none at start; both players train from their barracks.
+
+            // Cities — 5×5 border corners flush with map corners (grid is 14×14, rows/cols 0–13).
+            // Ironhaven (2,11): border rows 0–4, cols 9–13 → top-right corner (0,13).
+            //   Mountain at (0,12) → mine; Forests at (0,11),(1,12) → lumber camp.
             {
-                world.addCity(Position(1, 11), City("Ironhaven"), 0);
-                world.getTileAt(Position(2, 11)).setTileBuilding(BuildingType::BARRACK);
-                world.getTileAt(Position(0, 10)).setTileBuilding(BuildingType::FARM);
-                world.getTileAt(Position(1, 10)).setTileBuilding(BuildingType::FARM);
+                world.addCity(Position(2, 11), City("Ironhaven"), 0);
+                world.getTileAt(Position(3, 11)).setTileBuilding(BuildingType::BARRACK);
+                world.getTileAt(Position(1, 11)).setTileBuilding(BuildingType::FARM);
+                world.getTileAt(Position(2, 10)).setTileBuilding(BuildingType::FARM);
             }
+            // Stonekeep (11,2): border rows 9–13, cols 0–4 → bottom-left corner (13,0).
+            //   Mountains at (11,1),(13,3),(12,0) → mine; Forests at (11,3),(11,4),(12,4) → lumber camp.
             {
-                world.addCity(Position(12, 2), City("Stonekeep"), 1);
-                world.getTileAt(Position(11, 2)).setTileBuilding(BuildingType::BARRACK);
-                world.getTileAt(Position(13, 2)).setTileBuilding(BuildingType::FARM);
+                world.addCity(Position(11, 2), City("Stonekeep"), 1);
+                world.getTileAt(Position(12, 2)).setTileBuilding(BuildingType::BARRACK);
+                world.getTileAt(Position(10, 2)).setTileBuilding(BuildingType::FARM);
                 world.getTileAt(Position(12, 3)).setTileBuilding(BuildingType::FARM);
             }
 

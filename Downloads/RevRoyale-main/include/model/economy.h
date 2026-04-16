@@ -59,7 +59,7 @@ namespace std {
 // Food comes only from buildings; metal and wood have a city base supply.
 inline int cityCapacity(ResourceType rt) {
     if (rt == ResourceType::METAL) return 3;
-    if (rt == ResourceType::WOOD)  return 2;
+    if (rt == ResourceType::WOOD)  return 4;   // raised so players start with spare wood for a mine
     return 0;   // FOOD: build Farms/Fisheries; cities provide no food
 }
 

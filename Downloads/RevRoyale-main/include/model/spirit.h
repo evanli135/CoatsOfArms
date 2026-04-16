@@ -220,11 +220,8 @@ inline std::array<Blessing, 3> generateBlessingChoices(int playerId, int turnNum
     for (int i = 0; i < 3; ++i) {
         BlessingEffect effect = pickEffect(spirits[i]);
 
-        // Unit type: FLAME_CHARGE is Cavalry-only; SHADOW_POUNCE is Scout-only; rest are random.
-        UnitType targetUnit =
-            (effect == BlessingEffect::FLAME_CHARGE)  ? UnitType::CAVALRY :
-            (effect == BlessingEffect::SHADOW_POUNCE) ? UnitType::SCOUT
-                                                      : UNIT_TYPES[randN(5)];
+        // Unit type is always random — any unit can use any spell.
+        UnitType targetUnit = UNIT_TYPES[randN(5)];
 
         // isMagic is determined by the effect — never random.
         bool magic = isActivatedAbility(effect);

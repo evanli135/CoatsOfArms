@@ -10,23 +10,23 @@
 
 static const SpellDef SPELL_DEFS[] = {
     // name            description                                          cost  requiredBlessing
-    { "Sear",         "Apply a burning debuff to the target unit",           8,  BlessingEffect::FLAME_SEAR         },
-    { "Blaze Aura",   "Nearby allies deal bonus fire damage this turn",     10,  BlessingEffect::FLAME_BLAZE_AURA   },
-    { "Ignite",       "Gain extra movement speed after the next kill",       6,  BlessingEffect::FLAME_IGNITE       },
+    { "Sear",         "Apply a burning debuff to the target unit",           5,  BlessingEffect::FLAME_SEAR         },
+    { "Blaze Aura",   "Nearby allies deal bonus fire damage this turn",      5,  BlessingEffect::FLAME_BLAZE_AURA   },
+    { "Ignite",       "Gain extra movement speed after the next kill",       5,  BlessingEffect::FLAME_IGNITE       },
 
-    { "Veil",         "You and adjacent allies gain 30% dodge until your next turn", 12, BlessingEffect::SHADOW_VEIL },
-    { "Shadow Step",  "Reposition to a new tile after defeating an enemy",   9,  BlessingEffect::SHADOW_STEP        },
-    { "Dark Strike",  "Next attack bypasses a portion of enemy defense",     8,  BlessingEffect::SHADOW_DARK_STRIKE },
+    { "Veil",         "You and adjacent allies gain 30% dodge until your next turn",  5, BlessingEffect::SHADOW_VEIL },
+    { "Shadow Step",  "Reposition to a new tile after defeating an enemy",   5,  BlessingEffect::SHADOW_STEP        },
+    { "Dark Strike",  "Next attack bypasses a portion of enemy defense",     5,  BlessingEffect::SHADOW_DARK_STRIKE },
 
-    { "Swiftness",    "Gain +1 movement range this turn",                    6,  BlessingEffect::GALE_SWIFTNESS     },
-    { "Far Reach",    "Gain +1 attack range this turn",                      6,  BlessingEffect::GALE_FAR_REACH     },
-    { "Tumble",       "May move again after attacking this turn",            10,  BlessingEffect::GALE_TUMBLE        },
+    { "Swiftness",    "Gain +1 movement range this turn",                    5,  BlessingEffect::GALE_SWIFTNESS     },
+    { "Far Reach",    "Gain +1 attack range this turn",                      5,  BlessingEffect::GALE_FAR_REACH     },
+    { "Tumble",       "May move again after attacking this turn",            5,  BlessingEffect::GALE_TUMBLE        },
 
-    { "Iron Skin",    "Reduce incoming physical damage this turn",           7,  BlessingEffect::MARTIAL_IRON_SKIN  },
-    { "Battle Cry",   "Adjacent allies gain a +attack bonus this turn",      9,  BlessingEffect::MARTIAL_BATTLE_CRY },
-    { "Endure",       "Survive a lethal blow at 1 HP once per engagement",  12,  BlessingEffect::MARTIAL_ENDURE     },
-    { "Shadow Pounce", "Scout vanishes for one turn; next attack deals double damage", 8, BlessingEffect::SHADOW_POUNCE },
-    { "Flame Charge",  "Charge in a straight line (4 tiles). Enemies hit for 25 dmg. Trail burns for 3 turns.", 5, BlessingEffect::FLAME_IGNITE },
+    { "Iron Skin",    "Reduce incoming physical damage this turn",           5,  BlessingEffect::MARTIAL_IRON_SKIN  },
+    { "Battle Cry",   "Adjacent allies gain a +attack bonus this turn",      5,  BlessingEffect::MARTIAL_BATTLE_CRY },
+    { "Endure",       "Survive a lethal blow at 1 HP once per engagement",  5,  BlessingEffect::MARTIAL_ENDURE     },
+    { "Shadow Pounce", "Vanish for one turn; next attack deals double damage", 5, BlessingEffect::SHADOW_POUNCE },
+    { "Flame Charge",  "Charge in a straight line (4 tiles). Enemies hit for 25 dmg. Trail burns for 3 turns.", 5, BlessingEffect::FLAME_CHARGE },
 };
 
 const SpellDef& MagicSystem::getSpellDef(SpellId spell) {
@@ -137,7 +137,6 @@ std::optional<PlayerError> MagicSystem::castSpell(
     }
 
     if (spell == SpellId::SHADOW_POUNCE) {
-        if (caster->getType() != UnitType::SCOUT) return PlayerError::NOTSUPPORTED;
         if (targetPos != casterPos) return PlayerError::INVALIDTARGET;
 
         caster->spendMagic(def.cost);
@@ -147,7 +146,6 @@ std::optional<PlayerError> MagicSystem::castSpell(
     }
 
     if (spell == SpellId::FLAME_CHARGE) {
-        if (caster->getType() != UnitType::CAVALRY) return PlayerError::NOTSUPPORTED;
 
         int dr = targetPos.row() - casterPos.row();
         int dc = targetPos.col() - casterPos.col();
@@ -232,15 +230,13 @@ std::vector<Position> MagicSystem::getCastablePositions(
         return { casterPos };
     }
 
-    // SHADOW_POUNCE: Scout targets only themselves (self-cast)
+    // SHADOW_POUNCE: self-cast on any unit
     if (spell == SpellId::SHADOW_POUNCE) {
-        if (caster->getType() != UnitType::SCOUT) return {};
         return { casterPos };
     }
 
     // FLAME_CHARGE: show empty landing tiles along cardinal lines (up to 4 tiles)
     if (spell == SpellId::FLAME_CHARGE) {
-        if (caster->getType() != UnitType::CAVALRY) return {};
 
         std::vector<Position> result;
         static const int DIRS[4][2] = {{-1,0},{1,0},{0,-1},{0,1}};

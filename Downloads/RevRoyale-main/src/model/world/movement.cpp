@@ -185,7 +185,18 @@ std::optional<PlayerError> MovementSystem::move(Position origin, Position destin
 
     if (unitId.has_value()) {
         world.getTileAt(destination).placeUnit(unitId.value());
-        world.getUnitAt(destination)->setMoved(true);
+        Unit* movedUnit = world.getUnitAt(destination);
+        movedUnit->setMoved(true);
+
+        // Win condition: enemy unit enters an opposing city center.
+        if (world.hasCityAt(destination)) {
+            const City* city = world.getCityAt(destination);
+            if (city && city->hasOwner() &&
+                city->getOwner().getId() != movedUnit->getOwner().getId()) {
+                world.setWinner(movedUnit->getOwner().getId());
+            }
+        }
+
         return std::nullopt;
     } else {
         throw std::logic_error("FATAL INTERNAL: No unit at the source position");

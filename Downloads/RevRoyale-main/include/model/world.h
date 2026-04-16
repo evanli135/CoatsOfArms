@@ -317,6 +317,14 @@ public:
 
     void startGame();
 
+    bool isOver()      const { return phase == GamePhase::ENDGAME; }
+    int  getWinnerId() const { return winnerId; }
+
+    void setWinner(int playerId) {
+        phase    = GamePhase::ENDGAME;
+        winnerId = playerId;
+    }
+
     /** Returns the set of tile positions visible to the given player this turn. */
     std::unordered_set<Position> getVisiblePositions(int playerId) const;
 
@@ -373,6 +381,7 @@ private:
     int       currentPlayerIndex = 0;
     GamePhase phase              = GamePhase::PREGAME;
     int       turn               = 0;
+    int       winnerId           = -1;  // set when phase == ENDGAME
 
     vector<ModelObserver*>                        observers;
 
