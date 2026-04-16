@@ -126,7 +126,8 @@ int main() {
                 pendingIdx = *pb;
         }
 
-        auto selPos = active.getSelectedPosition();
+        auto selPos     = active.getSelectedPosition();
+        auto activeSpell = active.getSelectedSpell();
         view.render(
             model,
             active.getHoverPosition().value_or(Position(0, 0)),
@@ -135,7 +136,8 @@ int main() {
             active.getCurrentMode(),
             active.getEnabledActions(),
             pendingIdx,
-            active.getPendingBlessingChoices()
+            active.getPendingBlessingChoices(),
+            activeSpell
         );
 
         EndDrawing();

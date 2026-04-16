@@ -73,6 +73,9 @@ public:
     /** Always returns nullopt — BUILDING mode does not use a pending ControllerAction. */
     std::optional<ControllerAction> getPendingAction() const override { return std::nullopt; }
 
+    /** Highlights the chosen building-type button while awaiting a border-tile click. */
+    std::optional<int> getPendingButtonIndex() const override { return pendingTypeIndex; }
+
     /** Returns labels with cost on line 1 and terrain hint / disable reason on line 2. */
     std::vector<std::string> getActionLabels() const override;
 
@@ -83,6 +86,8 @@ private:
     const Player& player;
 
     std::optional<Position> selection;
+    bool                    selectionIsCityCenter = false;  // true when city center was clicked
+    std::optional<int>      pendingTypeIndex;               // set after picking type from city, awaiting tile
 
     std::optional<PlayerError> selectOrigin(Position pos);
 };

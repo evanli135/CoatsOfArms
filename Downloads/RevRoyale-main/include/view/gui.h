@@ -30,7 +30,9 @@ public:
 
     /** Render the full frame.
      *  blessingChoices: pass the pending blessing options when in PRAY mode phase 2
-     *  so the spirit selection overlay is shown. */
+     *  so the spirit selection overlay is shown.
+     *  activeSpell: the spell selected in SPELL_TARGET sub-state; used to highlight
+     *  castable tiles on the map. Pass nullopt when no spell is being targeted. */
     void render(const World& world,
                 const Position& hoverPos,
                 const Position* selectedPos,
@@ -38,7 +40,8 @@ public:
                 ControllerMode currentMode,
                 const std::vector<bool>& enabledActions = {},
                 int pendingActionIndex = -1,
-                const std::optional<std::array<Blessing, 3>>& blessingChoices = std::nullopt);
+                const std::optional<std::array<Blessing, 3>>& blessingChoices = std::nullopt,
+                std::optional<SpellId> activeSpell = std::nullopt);
 
     /** Resolve a left-click to a ClickTarget.  Priority: grid > action > mode. */
     std::optional<ClickTarget> pollClick(const std::vector<std::string>& actionLabels);

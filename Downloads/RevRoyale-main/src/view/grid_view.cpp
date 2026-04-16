@@ -220,6 +220,9 @@ void GridView::renderUnitLayer(const World& world, const Tile& tile, const Posit
 
     const bool isCurrentPlayer = (u->getOwner().getId() == world.getCurrentPlayer().getId());
 
+    // Shadow-cloaked enemy units are completely invisible to the active player.
+    if (!isCurrentPlayer && u->isShadowCloaked()) return;
+
     // A unit is "effectively done" when it truly has nothing left to do this turn:
     // either it has attacked, or it has moved and no enemy is within attack range.
     bool effectivelyDone = false;
@@ -284,6 +287,31 @@ void GridView::renderUnitLayer(const World& world, const Tile& tile, const Posit
             {(float)(cx + 4), (float)(iy + 1)},
             {(float)cx,       (float)(iy + 6)},
             Color{255, 255, 255, 70});
+    }
+
+    // Shadow Pounce cloaked state — dark translucent overlay + shadow aura
+    if (u->isShadowCloaked()) {
+        const float st     = (float)GetTime();
+        const float spulse = 0.5f + 0.5f * sinf(st * 3.5f);
+        const int   scx    = px;
+        const int   scy    = unitPy + ISO_HALF_H - 4;
+
+        // Dark pulsing aura rings
+        unsigned char sa = (unsigned char)(35 + 35 * spulse);
+        DrawCircle(scx, scy, 26, Color{40, 0, 80, sa});
+        DrawCircleLines(scx, scy, 26, Color{120, 30, 200, (unsigned char)(sa * 2)});
+        DrawCircleLines(scx, scy, 20, Color{90, 20, 160, (unsigned char)(sa + 30)});
+
+        // Floating shadow particles (4 orbiting dots)
+        for (int i = 0; i < 4; ++i) {
+            float angle = st * 2.0f + i * (3.14159f / 2.0f);
+            int   px2   = scx + (int)(18.0f * cosf(angle));
+            int   py2   = scy + (int)(8.0f  * sinf(angle));
+            DrawCircle(px2, py2, 2, Color{160, 60, 255, (unsigned char)(120 + 60 * spulse)});
+        }
+
+        // Override tint to be semi-transparent dark purple for the unit sprite
+        tint = Color{80, 20, 140, 160};
     }
 
     // Drop shadow, then sprite
@@ -635,6 +663,7 @@ void GridView::renderCell(const World& world, const Position& pos,
     renderCityLayer(tile, px, py);
     renderBuildingLayer(world, pos, px, py);
     if (tile.hasShrine()) Sprites::shrine(px, py);
+    if (tile.hasFire())                    renderFireLayer(px, py, tile.getFireTurns());
     if (isBuildable)                       renderBuildableTileLayer(px, py);
     if (isReachable)                       renderReachableLayer(px, py, isHovered);
     if (isAttackable)                      renderAttackableLayer(px, py);
@@ -713,6 +742,41 @@ void GridView::renderAttackableLayer(int px, int py) {
     DrawLineEx(rt,  bot, 1.5f, Color{255, 80,  80,  210});
     DrawLineEx(bot, lt,  1.5f, Color{255, 80,  80,  210});
     DrawLineEx(lt,  top, 1.5f, Color{255, 80,  80,  210});
+}
+
+void GridView::renderFireLayer(int px, int py, int turns) {
+    const float t     = (float)GetTime();
+    const float pulse = 0.5f + 0.5f * sinf(t * 5.0f);
+
+    Vector2 top = {(float)px,              (float)py};
+    Vector2 rt  = {(float)(px+ISO_HALF_W), (float)(py+ISO_HALF_H)};
+    Vector2 bot = {(float)px,              (float)(py+ISO_TILE_H)};
+    Vector2 lt  = {(float)(px-ISO_HALF_W), (float)(py+ISO_HALF_H)};
+
+    // Fiery fill — orange-red, intensity varies with remaining turns
+    float intensity = turns / 3.0f;   // 1.0 when fresh, ~0.33 on last tick
+    unsigned char fa = (unsigned char)((60 + 50 * pulse) * intensity);
+    DrawTriangle(top, lt, bot, Color{255, 80, 10, fa});
+    DrawTriangle(top, bot, rt, Color{255, 80, 10, fa});
+
+    // Bright orange border
+    unsigned char ba = (unsigned char)((160 + 90 * pulse) * intensity);
+    DrawLineEx(top, rt,  2.0f, Color{255, 140, 30, ba});
+    DrawLineEx(rt,  bot, 2.0f, Color{255, 140, 30, ba});
+    DrawLineEx(bot, lt,  2.0f, Color{255, 140, 30, ba});
+    DrawLineEx(lt,  top, 2.0f, Color{255, 140, 30, ba});
+
+    // Small flame sparks scattered across tile centre
+    const float cx = (float)px;
+    const float cy = (float)(py + ISO_HALF_H);
+    static const float SPARK_OX[] = { 0.0f,  8.0f, -8.0f,  4.0f, -5.0f };
+    static const float SPARK_OY[] = {-6.0f, -2.0f, -3.0f,  5.0f,  4.0f };
+    for (int i = 0; i < 5; ++i) {
+        float sp = fmodf(t * 2.2f + i * 0.4f, 1.0f);
+        float sy = cy + SPARK_OY[i] - sp * 10.0f;
+        unsigned char sa = (unsigned char)((1.0f - sp) * 200 * intensity);
+        DrawCircle((int)(cx + SPARK_OX[i]), (int)sy, 2.0f, Color{255, (unsigned char)(200 + sp*55), 30, sa});
+    }
 }
 
 void GridView::renderCastableLayer(int px, int py) {

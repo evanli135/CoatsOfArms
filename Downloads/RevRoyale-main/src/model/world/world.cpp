@@ -150,6 +150,7 @@ void World::nextTurn() {
     trainingSystem.advanceTraining(pid);
     constructionSystem.advanceConstruction(pid);
     magicSystem.advanceMagic(pid);
+    advanceFire();
 
     printCurrentPlayer(*this);
     notifyObservers(TurnChangeEvent{turn, players[currentPlayerIndex].getId()});
@@ -214,18 +215,26 @@ std::optional<PlayerError> World::applyControllerRequest(ControllerRequest actio
         case ControllerAction::CAST: {
             const Unit* caster = getUnitAt(origin);
             if (!caster) return PlayerError::INVALIDTARGET;
-            const Unit* target = getUnitAt(destination);
-            if (!target) return PlayerError::INVALIDTARGET;
+            if (!action.spellId.has_value()) return PlayerError::INVALIDTARGET;
+
+            SpellId spell = *action.spellId;
 
             int  casterMagicBefore = caster->getCurrentMagic();
-            bool targetWasBurning  = target->hasBurn();
+            const Unit* target     = getUnitAt(destination);
+            bool targetWasBurning  = target ? target->hasBurn() : false;
 
             auto cmd = std::make_unique<CastCommand>(
-                origin, destination, SpellId::SEAR, action.getPlayer(),
+                origin, destination, spell, action.getPlayer(),
                 casterMagicBefore, targetWasBurning);
             auto result = cmd->execute(*this);
             if (!result.has_value()) commandHistory.push_back(std::move(cmd));
             return result;
+        }
+
+        case ControllerAction::CHARGE: {
+            // Flame Charge — no undo (multi-tile effect is too complex to reverse)
+            return magicSystem.castSpell(origin, destination,
+                                         SpellId::FLAME_CHARGE, action.getPlayer());
         }
 
         default:
@@ -316,6 +325,37 @@ std::optional<PlayerError> World::issueConstructCommand(
     auto result = cmd->execute(*this);
     if (!result.has_value()) commandHistory.push_back(std::move(cmd));
     return result;
+}
+
+// ---------------------------------------------------------------------------
+// Fire tile advancement
+// ---------------------------------------------------------------------------
+
+void World::advanceFire() {
+    for (int r = 0; r < Game::HEIGHT; ++r) {
+        for (int c = 0; c < Game::WIDTH; ++c) {
+            Position pos(r, c);
+            Tile& tile = getTileAt(pos);
+            if (!tile.hasFire()) continue;
+
+            // Any unit standing on a fire tile takes damage
+            if (hasUnitAt(pos)) {
+                Unit* unit = getUnitAt(pos);
+                if (unit && unit->isAlive()) {
+                    int dmg = 6;
+                    unit->lowerHP(dmg);
+                    notifyObservers(DamageDealtEvent{pos, dmg, false});
+                    if (!unit->isAlive()) {
+                        UnitId uid = tile.getUnit().value();
+                        notifyObservers(UnitDiedEvent{uid, pos});
+                        removeUnit(pos);
+                    }
+                }
+            }
+
+            tile.tickFire();
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -543,6 +583,12 @@ World WorldFactory::create(WorldLayout layout, std::vector<Player> players) {
                 world.getTileAt(Position(13, 2)).setTileBuilding(BuildingType::FARM);
                 world.getTileAt(Position(12, 3)).setTileBuilding(BuildingType::FARM);
             }
+
+            // Neutral shrines — pre-placed at map creation; units must be adjacent to pray.
+            world.addShrine(Position(2, 5));
+            world.getTileAt(Position(2, 5)).setTileBuilding(BuildingType::SHRINE);
+            world.addShrine(Position(10, 7));
+            world.getTileAt(Position(10, 7)).setTileBuilding(BuildingType::SHRINE);
             break;
         }
         case WorldLayout::EMPTY:

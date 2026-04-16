@@ -75,7 +75,8 @@ void GUI::render(const World& world,
                  ControllerMode currentMode,
                  const std::vector<bool>& enabledActions,
                  int pendingActionIndex,
-                 const std::optional<std::array<Blessing, 3>>& blessingChoices)
+                 const std::optional<std::array<Blessing, 3>>& blessingChoices,
+                 std::optional<SpellId> activeSpell)
 {
     updateLayout();
 
@@ -107,10 +108,10 @@ void GUI::render(const World& world,
                 if (world.getCombatForecast(*selectedPos, apos).lethal)
                     lethal.push_back(apos);
             }
-            // Only compute castable when CAST action is explicitly selected (button index 2)
-            if (pendingActionIndex == 2) {
+            // Show cast targets only when a specific spell has been selected (SPELL_TARGET)
+            if (pendingActionIndex == 2 && activeSpell.has_value()) {
                 castable = world.getCastablePositions(
-                    *selectedPos, world.getCurrentPlayer(), SpellId::SEAR);
+                    *selectedPos, world.getCurrentPlayer(), *activeSpell);
             }
             std::unordered_set<Position> reachSet(reachable.begin(), reachable.end());
             if (reachSet.count(hoverPos) && hoverPos != *selectedPos)
@@ -166,10 +167,12 @@ void GUI::render(const World& world,
         Sprites::modeIcon(MODES[i], r.x, r.y, ICON_SIZE, static_cast<int>(currentMode) == i);
     }
 
-    // Action buttons (left panel) — suppressed when spirit overlay is active
+    // Action buttons (left panel) — only shown when a unit is selected; suppressed during spirit overlay
     if (!currentBlessingChoices_.has_value()) {
-        DrawText("ACTIONS", frameLayout_.actX, frameLayout_.actBtnY - 20, 14, Color{160, 160, 180, 255});
-        actionView->render(actionLabels, actionButtonSlots, pendingActionIndex, enabledActions);  // NOLINT
+        if (selectedPos) {
+            DrawText("ACTIONS", frameLayout_.actX, frameLayout_.actBtnY - 20, 14, Color{160, 160, 180, 255});
+            actionView->render(actionLabels, actionButtonSlots, pendingActionIndex, enabledActions);  // NOLINT
+        }
     } else {
         DrawText("PRAY MODE", frameLayout_.actX, frameLayout_.actBtnY - 20, 14, Color{175, 110, 255, 220});
         DrawText("Choose a spirit", frameLayout_.actX, frameLayout_.actBtnY + 6,  12, Color{155, 155, 175, 190});

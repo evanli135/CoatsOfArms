@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <optional>
+#include <vector>
 #include "controller/error.h"
 #include "model/util.h"
 #include "model/unit.h"
@@ -162,4 +163,7 @@ private:
 
     int  casterMagicBefore;   // saved to restore on undo
     bool targetWasBurning;    // if true, undo does not clear the burn
+
+    // VEIL: positions of every unit that received the veil buff (for undo).
+    std::vector<Position> veiledPositions;
 };

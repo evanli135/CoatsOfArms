@@ -57,6 +57,9 @@ void TrainingSystem::advanceTraining(int playerId) {
             for (const auto& p : world.players) {
                 if (p.getId() == playerId) {
                     world.addUnit(cpos, UnitFactory::create(slot->unitType, p));
+                    // Apply any blessings the player has already earned to the new unit.
+                    Unit* spawned = world.getUnitAt(cpos);
+                    if (spawned) world.blessingSystem.refreshUnitPassives(*spawned);
                     city->clearTraining();
                     break;
                 }

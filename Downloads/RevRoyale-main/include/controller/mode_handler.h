@@ -7,6 +7,7 @@
 #include <vector>
 #include "controller/action.h"
 #include "controller/error.h"
+#include "model/magic.h"
 #include "model/spirit.h"
 #include "model/util.h"
 
@@ -121,6 +122,12 @@ public:
     virtual std::optional<std::array<Blessing, 3>> getPendingBlessingChoices() const {
         return std::nullopt;
     }
+
+    /**
+     * Returns the spell selected in SPELL_TARGET sub-state, otherwise nullopt.
+     * Default returns nullopt; TacticMode overrides.
+     */
+    virtual std::optional<SpellId> getSelectedSpell() const { return std::nullopt; }
 
     /**
      * Returns the display labels for this mode's action buttons, in index order.

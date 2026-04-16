@@ -5,56 +5,115 @@
 #include "model/resource_system.h"
 #include "model/construction_system.h"
 
+static const BuildingType BUILDING_TYPES[] = {
+    BuildingType::FOUNDRY,
+    BuildingType::BARRACK,
+    BuildingType::FARM,
+    BuildingType::FISHERY,
+    BuildingType::LUMBER_CAMP,
+    BuildingType::MINE,
+    BuildingType::SHRINE,
+};
+static constexpr int NUM_TYPES = 7;
+
 BuildingMode::BuildingMode(World& world, const Player& player)
     : world(world), player(player) {}
 
+// ---------------------------------------------------------------------------
+// onTileSelect
+//
+// Two flows:
+//   City-center first: click city center → selection set, building buttons appear.
+//     Then click a building button → pendingTypeIndex set, border tiles highlighted.
+//     Then click a border tile → construction issued.
+//
+//   Border-tile first (unchanged): click border tile → selection set.
+//     Then click a building button → construction issued immediately.
+// ---------------------------------------------------------------------------
 std::optional<PlayerError> BuildingMode::onTileSelect(Position pos) {
+    if (pendingTypeIndex.has_value()) {
+        // Phase 3: user has chosen a building type from the city; now picking the border tile.
+        if (world.hasCityAt(pos)) return PlayerError::INVALIDTARGET;
+        const City* city = world.getCityForTile(pos);
+        if (!city || !city->hasOwner() || city->getOwner().getId() != player.getId())
+            return PlayerError::INVALIDTARGET;
+
+        auto result = world.issueConstructCommand(pos, BUILDING_TYPES[*pendingTypeIndex], player);
+        if (!result.has_value()) {
+            selection.reset();
+            selectionIsCityCenter = false;
+            pendingTypeIndex.reset();
+        }
+        return result;
+    }
+
     return selectOrigin(pos);
 }
 
-// Phase 1: choose a border tile to build on.
-// Validates that the tile is in a city border owned by this player.
+// Phase 1a: city center clicked — select the city.
+// Phase 1b: border tile clicked — select that tile directly (existing flow).
 std::optional<PlayerError> BuildingMode::selectOrigin(Position pos) {
-    // City center tiles are for training, not building placement.
-    if (world.hasCityAt(pos)) return PlayerError::INVALIDTARGET;
+    if (world.hasCityAt(pos)) {
+        // City center selected — validate ownership, wait for building type button.
+        const City* city = world.getCityAt(pos);
+        if (!city || !city->hasOwner() || city->getOwner().getId() != player.getId())
+            return PlayerError::INVALIDTARGET;
 
+        selection             = pos;
+        selectionIsCityCenter = true;
+        pendingTypeIndex.reset();
+        return std::nullopt;
+    }
+
+    // Border tile selected — existing flow.
     const City* city = world.getCityForTile(pos);
     if (!city) return PlayerError::INVALIDTARGET;
     if (!city->hasOwner() || city->getOwner().getId() != player.getId())
         return PlayerError::INVALIDTARGET;
 
-    selection = pos;
+    selection             = pos;
+    selectionIsCityCenter = false;
+    pendingTypeIndex.reset();
     return std::nullopt;
 }
 
-// Phase 2 (button): choose a building type to construct at the selected tile.
+// ---------------------------------------------------------------------------
+// onActionButton
+//
+// If a city center was selected: store the building type and wait for a
+// border-tile click (phase 2 → 3). The button is highlighted via
+// getPendingButtonIndex() until the tile is chosen.
+//
+// If a border tile was selected: issue construction immediately.
+// ---------------------------------------------------------------------------
 std::optional<PlayerError> BuildingMode::onActionButton(int index) {
     if (!selection.has_value()) return PlayerError::INVALIDTARGET;
+    if (index < 0 || index >= NUM_TYPES) return PlayerError::NOTSUPPORTED;
 
-    static const BuildingType types[] = {
-        BuildingType::FOUNDRY,
-        BuildingType::BARRACK,
-        BuildingType::FARM,
-        BuildingType::FISHERY,
-        BuildingType::LUMBER_CAMP,
-        BuildingType::MINE,
-        BuildingType::SHRINE,
-    };
-    if (index < 0 || index >= 7) return PlayerError::NOTSUPPORTED;
+    if (selectionIsCityCenter) {
+        // Phase 2: building type chosen — now wait for border tile.
+        pendingTypeIndex = index;
+        return std::nullopt;
+    }
 
-    auto result = world.issueConstructCommand(*selection, types[index], player);
+    // Border tile already selected — build immediately.
+    auto result = world.issueConstructCommand(*selection, BUILDING_TYPES[index], player);
     if (!result.has_value()) {
         selection.reset();
+        selectionIsCityCenter = false;
+        pendingTypeIndex.reset();
     }
     return result;
 }
 
 void BuildingMode::onDeselect() {
     selection.reset();
+    selectionIsCityCenter = false;
+    pendingTypeIndex.reset();
 }
 
 void BuildingMode::onExit() {
-    selection.reset();
+    onDeselect();
 }
 
 std::vector<std::string> BuildingMode::getActionLabels() const {
@@ -77,6 +136,9 @@ std::vector<std::string> BuildingMode::getActionLabels() const {
     int availMetal = world.getAvailableCapacity(pid, ResourceType::METAL);
     int availWood  = world.getAvailableCapacity(pid, ResourceType::WOOD);
 
+    // When awaiting a border-tile click, show a header hint instead of "ACTIONS".
+    // (The action labels themselves stay as building types so the selected one stays visible.)
+
     std::vector<std::string> result;
     for (const auto& info : INFOS) {
         int mc = ResourceSystem::buildingMetalCost(info.type);
@@ -91,15 +153,14 @@ std::vector<std::string> BuildingMode::getActionLabels() const {
             if (wc > 0) label += std::to_string(wc) + "w";
         }
 
-        // Line 2: first blocking reason, then terrain hint
+        // Line 2: first blocking reason, then terrain hint.
+        // Tile-specific checks only apply when a border tile (not city center) is selected.
         std::string line2;
-        bool hasResources = (availMetal >= mc && availWood >= wc);
-
         if (availMetal < mc) {
             line2 = "Need " + std::to_string(mc) + "m metal";
         } else if (availWood < wc) {
             line2 = "Need " + std::to_string(wc) + "w wood";
-        } else if (selection.has_value()) {
+        } else if (selection.has_value() && !selectionIsCityCenter) {
             const Tile& tile = world.getTileAt(*selection);
             bool tileEmpty = !tile.hasTileBuilding();
             bool notQueued = true;
@@ -124,28 +185,23 @@ std::vector<std::string> BuildingMode::getActionLabels() const {
 }
 
 std::vector<bool> BuildingMode::getEnabledActions() const {
-    static const BuildingType TYPES[] = {
-        BuildingType::FOUNDRY, BuildingType::BARRACK,
-        BuildingType::FARM, BuildingType::FISHERY,
-        BuildingType::LUMBER_CAMP, BuildingType::MINE,
-        BuildingType::SHRINE,
-    };
-
     int pid        = player.getId();
     int availMetal = world.getAvailableCapacity(pid, ResourceType::METAL);
     int availWood  = world.getAvailableCapacity(pid, ResourceType::WOOD);
 
     std::vector<bool> result;
-    for (auto btype : TYPES) {
+    for (auto btype : BUILDING_TYPES) {
         int  mc = ResourceSystem::buildingMetalCost(btype);
         int  wc = ResourceSystem::buildingWoodCost(btype);
         bool hasResources = (availMetal >= mc && availWood >= wc);
 
-        if (!selection.has_value()) {
+        // When no tile is selected, or a city center is selected: only gate on resources.
+        if (!selection.has_value() || selectionIsCityCenter) {
             result.push_back(hasResources);
             continue;
         }
 
+        // Border tile selected: also check terrain, occupancy, and queue.
         const Tile& tile = world.getTileAt(*selection);
         bool terrainOk   = ConstructionSystem::canBuildOnTerrain(btype, tile.getTerrain());
         bool tileEmpty   = !tile.hasTileBuilding();

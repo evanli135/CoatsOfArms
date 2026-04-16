@@ -156,6 +156,9 @@ public:
         return mode->getPendingBlessingChoices();
     }
 
+    /** Returns the spell selected in SPELL_TARGET sub-state, otherwise nullopt. */
+    std::optional<SpellId> getSelectedSpell() const { return mode->getSelectedSpell(); }
+
     /**
      * Updates the stored hover position.
      *

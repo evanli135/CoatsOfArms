@@ -37,6 +37,12 @@ enum class SpellId {
     IRON_SKIN,     // reduce incoming physical damage this turn
     BATTLE_CRY,    // adjacent allies gain an attack bonus this turn
     ENDURE,        // survive a lethal blow at 1 HP once per engagement
+
+    // Scout special
+    SHADOW_POUNCE, // Scout vanishes; next attack deals double damage
+
+    // Cavalry special
+    FLAME_CHARGE,  // straight-line charge, damages enemies, leaves fire trail
 };
 
 // ---------------------------------------------------------------------------

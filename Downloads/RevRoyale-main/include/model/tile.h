@@ -106,6 +106,24 @@ public:
     TileResourceValue getTileResourceValue() const { return resourceValue; }
     void setTileResourceValue(TileResourceValue v) { resourceValue = v; }
 
+    // ── Fire state (placed by Flame Charge) ──────────────────────────────────
+    bool hasFire()         const { return fireTurnsRemaining > 0; }
+    int  getFireTurns()    const { return fireTurnsRemaining; }
+    int  getFireOwnerId()  const { return fireOwnerId; }
+
+    void setFire(int turns, int ownerId) {
+        fireTurnsRemaining = turns;
+        fireOwnerId        = ownerId;
+    }
+
+    /** Decrement fire counter by one.  Clears fire when it reaches zero. */
+    void tickFire() {
+        if (fireTurnsRemaining > 0) {
+            --fireTurnsRemaining;
+            if (fireTurnsRemaining == 0) fireOwnerId = -1;
+        }
+    }
+
 private:
     Terrain terrain;
     std::optional<UnitId> unit;
@@ -113,4 +131,7 @@ private:
     std::optional<City> city;
     bool shrine = false;
     TileResourceValue resourceValue = TileResourceValue::MEDIUM;
+
+    int  fireTurnsRemaining = 0;
+    int  fireOwnerId        = -1;
 };

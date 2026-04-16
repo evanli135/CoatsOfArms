@@ -1,8 +1,12 @@
 #pragma once
 
 #include <variant>
+#include <optional>
 #include "model/util.h"
 #include "model/player.h"
+
+// Forward declaration — full definition in model/magic.h
+enum class SpellId : int;
 
 /**
  * Raw input intent produced by a single keypress.
@@ -38,7 +42,8 @@ enum class ControllerAction {
     ATT,
     CON,
     TRN,
-    CAST  // cast a spell from origin unit onto destination unit
+    CAST,   // cast a spell from origin unit onto destination unit
+    CHARGE  // Cavalry Flame Charge — straight-line dash with fire trail
 };
 
 /**
@@ -73,20 +78,24 @@ using ClickTarget = std::variant<Position, int, ControllerMode>;
  * selected, then passed to World::applyControllerRequest().
  */
 struct ControllerRequest {
-    ControllerAction action;
-    Position         origin;
-    Position         destination;
-    Player           player;
+    ControllerAction      action;
+    Position              origin;
+    Position              destination;
+    Player                player;
+    std::optional<SpellId> spellId;   ///< Set when action == CAST; identifies which spell to cast.
 
     /**
      * @param action       The operation to perform.
      * @param origin       Tile the acting unit currently occupies.
      * @param destination  Target tile (move destination or attack target).
      * @param player       The player issuing the request.
+     * @param spellId      Which spell to cast (required when action == CAST).
      */
     ControllerRequest(ControllerAction action, Position origin,
-                      Position destination, Player player)
-        : action(action), origin(origin), destination(destination), player(player) {}
+                      Position destination, Player player,
+                      std::optional<SpellId> spellId = std::nullopt)
+        : action(action), origin(origin), destination(destination),
+          player(player), spellId(spellId) {}
 
     /** Returns the action to perform. */
     ControllerAction getAction()      const { return action; }

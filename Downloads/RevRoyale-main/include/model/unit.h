@@ -126,6 +126,14 @@ public:
     }
 };
 
+// SHADOW_POUNCE: doubles damage on the first attack after emerging from shadow.
+class ShadowPounceModifier : public DamageModifier {
+public:
+    int modify(int dmg, const Unit& /*attacker*/, const Unit& /*defender*/) const override {
+        return dmg * 2;
+    }
+};
+
 
 // -------------------------
 // BurnEffect — damage-over-time debuff applied by fire spells.
@@ -229,6 +237,28 @@ public:
     void setMoved(bool flag)    { moved = flag; }
     void setAttacked(bool flag) { attacked = flag; }
 
+    // ── Shadow Pounce ──────────────────────────────────────────────────────────
+    bool isShadowCloaked()  const { return shadowCloaked; }
+    void setShadowCloaked(bool v) { shadowCloaked = v; }
+
+    /** Apply the shadow-pounce state: mark cloaked and prime double-damage modifier. */
+    void applyShadowPounce() {
+        shadowCloaked = true;
+        modifiers.push_back(std::make_shared<ShadowPounceModifier>());
+    }
+
+    /** Remove shadow-pounce state after the attack fires (or on undo). */
+    void clearShadowPounce() {
+        shadowCloaked = false;
+        modifiers.clear();   // ShadowPounceModifier is the only runtime modifier
+    }
+
+    // ── Shadow Veil ────────────────────────────────────────────────────────────
+    bool hasVeil()            const { return veilTurnsLeft > 0; }
+    void applyVeil(int turns)       { veilTurnsLeft = turns; }
+    void clearVeil()                { veilTurnsLeft = 0; }
+    void tickVeil()                 { if (veilTurnsLeft > 0) --veilTurnsLeft; }
+
     // ── Blessing-passive setters (called by BlessingSystem::refreshUnitPassives) ──
     void setMovBonus(int b)       { movBonus = b; }
     void setRangeBonus(int b)     { rangeBonus = b; }
@@ -287,6 +317,12 @@ private:
     int  currentMagic;
     bool moved;
     bool attacked;
+
+    // Shadow Pounce state
+    bool shadowCloaked  = false; // set when Shadow Pounce is cast; cleared after next attack
+
+    // Veil state
+    int  veilTurnsLeft  = 0;     // SHADOW_VEIL: dodge chance for this many remaining caster-turns
 
     // Blessing-granted passive bonuses (set by BlessingSystem::refreshUnitPassives)
     int  movBonus       = 0;     // GALE_SWIFTNESS: +1 movement range

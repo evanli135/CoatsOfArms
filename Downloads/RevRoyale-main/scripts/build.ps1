@@ -15,6 +15,7 @@ $SRC = @(
     "src/model/world/construction_system.cpp",
     "src/model/world/spirit_system.cpp",
     "src/model/world/magic_system.cpp",
+    "src/model/world/blessing_system.cpp",
     "src/model/unit/unit.cpp",
     "src/model/world/tile.cpp",
     # View — grid

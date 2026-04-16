@@ -82,6 +82,7 @@ private:
     void renderReachableLayer(int px, int py, bool isHovered);
     void renderAttackableLayer(int px, int py);
     void renderCastableLayer(int px, int py);          // purple overlay for cast targets
+    void renderFireLayer(int px, int py, int turns);   // orange/red fire overlay for burning tiles
     void renderAttackableRingsLayer(int px, int py);   // falling rings (drawn before unit)
     void renderLethalLayer(int px, int py);
     void renderAttackableHoverLayer(int px, int py);   // crossing swords (drawn after unit)

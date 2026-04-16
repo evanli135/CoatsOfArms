@@ -23,105 +23,49 @@ class Player;
  */
 class TacticMode : public ModeHandler {
 public:
-    /**
-     * Constructs TacticMode with clean state (no selection, no pending action).
-     *
-     * @param world   The game world to read unit/tile state from and send requests to.
-     * @param player  The player this mode acts on behalf of.
-     */
     TacticMode(World& world, const Player& player);
 
-    /**
-     * Handles a tile selection in TACTIC mode.
-     *
-     * If no origin is selected, calls selectOrigin().
-     * If an origin is already selected, calls selectDestination().
-     *
-     * @param pos  The tile that was selected.
-     * @return     nullopt on success.
-     *             PlayerError from selectOrigin() or selectDestination().
-     *
-     * State: see selectOrigin() and selectDestination().
-     */
     std::optional<PlayerError> onTileSelect(Position pos) override;
-
-    /**
-     * Sets the pending action (step 2). Requires a unit to be selected first (step 1).
-     *
-     * index 0 → MOV (move unit to destination)
-     * index 1 → ATT (attack unit at destination)
-     *
-     * @param index  0-based action button index.
-     * @return       nullopt on success.
-     *               PlayerError::INVALIDTARGET if no unit is selected yet.
-     *               PlayerError::NOTSUPPORTED if index > 1.
-     *
-     * State: pendingAction = MOV or ATT on success.
-     */
     std::optional<PlayerError> onActionButton(int index) override;
-
-    /**
-     * Clears selection and pending action.
-     *
-     * State: selection = nullopt, pendingAction = nullopt.
-     */
     void onDeselect() override;
+    void onExit()     override;
 
-    /**
-     * Resets all mode state on mode exit.
-     * Called by switchMode() before this mode is replaced.
-     *
-     * State: selection = nullopt, pendingAction = nullopt.
-     */
-    void onExit() override;
-
-    /** Returns the currently selected origin tile, or nullopt if none. */
-    std::optional<Position>         getSelection()     const override { return selection; }
-
-    /** Returns the pending ControllerAction (MOV or ATT), or nullopt if none set. */
+    std::optional<Position>         getSelection()    const override { return selection; }
     std::optional<ControllerAction> getPendingAction() const override { return pendingAction; }
 
-    /** Returns {"MOVE", "ATTACK", "CAST"} — the three actions available in TACTIC mode. */
-    std::vector<std::string> getActionLabels() const override { return {"MOVE", "ATTACK", "CAST"}; }
+    /** Highlights CAST button (index 2) when a spell has been chosen and we're targeting. */
+    std::optional<int> getPendingButtonIndex() const override;
 
-    std::vector<bool> getEnabledActions() const override;
+    /** Returns the spell chosen in SPELL_TARGET sub-state, otherwise nullopt. */
+    std::optional<SpellId> getSelectedSpell() const override;
+
+    /**
+     * In SPELL_SELECT sub-state: returns the names of available spells.
+     * Otherwise returns {"MOVE", "ATTACK", "CAST"}.
+     */
+    std::vector<std::string> getActionLabels() const override;
+    std::vector<bool>        getEnabledActions() const override;
 
 private:
+    /** Sub-states for the CAST interaction flow. */
+    enum class TacticSubState {
+        NORMAL,        ///< Default: MOVE / ATTACK / CAST buttons
+        SPELL_SELECT,  ///< After clicking CAST: shows available spell names as buttons
+        SPELL_TARGET   ///< After picking a spell: shows cast targets; CAST button highlighted
+    };
+
     World& world;
     const Player& player;
 
+    TacticSubState                  subState      = TacticSubState::NORMAL;
     std::optional<Position>         selection;
     std::optional<ControllerAction> pendingAction;
+    std::optional<SpellId>          selectedSpell;
+    std::vector<SpellId>            availableSpells;   // cached when entering SPELL_SELECT
 
-    /**
-     * Phase 1: validates and records the origin tile.
-     *
-     * Requires: a unit at pos owned by player that has not yet acted (canMove()).
-     *
-     * @param pos  Candidate origin tile.
-     * @return     nullopt on success.
-     *             PlayerError::INVALIDTARGET if no unit, or unit is not owned by player.
-     *             PlayerError::UNITCANTMOVE if the unit has already acted this turn.
-     *
-     * State: selection = pos on success.
-     */
     std::optional<PlayerError> selectOrigin(Position pos);
-
-    /**
-     * Phase 3: dispatches a ControllerRequest to the model using the stored origin
-     * and the previously chosen pendingAction.
-     *
-     * Requires pendingAction to be set (via onActionButton) before calling.
-     * Clears selection and pendingAction on success; preserves them on failure
-     * so the player can pick a different destination.
-     *
-     * @param pos  The destination tile.
-     * @return     nullopt on success.
-     *             PlayerError::NOTSUPPORTED if no action was selected in step 2.
-     *             Any PlayerError returned by World::applyControllerRequest().
-     *
-     * State: on success — selection = nullopt, pendingAction = nullopt.
-     *        on failure — selection and pendingAction unchanged.
-     */
     std::optional<PlayerError> selectDestination(Position pos);
+
+    /** Returns all spells the selected unit can currently cast. */
+    std::vector<SpellId> computeAvailableSpells() const;
 };

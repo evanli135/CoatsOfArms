@@ -90,6 +90,16 @@ static const char* terrainDesc(Terrain t) {
     }
 }
 
+static Color spiritColor(SpiritType s) {
+    switch (s) {
+        case SpiritType::FLAME:   return Color{255, 120,  50, 255};
+        case SpiritType::SHADOW:  return Color{ 80, 100, 210, 255};
+        case SpiritType::GALE:    return Color{100, 200, 230, 255};
+        case SpiritType::MARTIAL: return Color{200, 170,  60, 255};
+    }
+    return Color{150, 150, 150, 255};
+}
+
 static const char* unitName(UnitType type) {
     switch (type) {
         case UnitType::WARRIOR: return "Warrior";
@@ -315,7 +325,40 @@ static void renderTerrainSection(int cx, int cw, int& y, Terrain ter, TileResour
     y += 20;
 }
 
-static void renderUnitSection(int cx, int cw, int& y, const Unit* u) {
+static void renderUnitBlessings(int cx, int cw, int& y,
+                                const World& world, const Unit* u) {
+    const auto& blessings = world.getPlayerBlessings(u->getOwner().getId());
+    std::vector<const Blessing*> relevant;
+    for (const Blessing& b : blessings) {
+        if (b.targetUnit == u->getType())
+            relevant.push_back(&b);
+    }
+    if (relevant.empty()) return;
+
+    drawDivider(cx, cw, y);
+    DrawText("SPIRIT ABILITIES", cx, y, 12, Color{170, 130, 220, 255});
+    y += 20;
+
+    for (const Blessing* b : relevant) {
+        Color sc = spiritColor(b->spirit);
+        DrawCircle(cx + 5, y + 6, 4, sc);
+        DrawText(blessingEffectName(b->effect), cx + 14, y, 14, sc);
+
+        const char* tag    = b->isMagic ? "ACTIVE" : "PASSIVE";
+        Color       tagCol = b->isMagic ? Color{160, 120, 230, 255}
+                                        : Color{100, 160, 100, 255};
+        int tw = MeasureText(tag, 10);
+        DrawRectangle(cx + cw - tw - 8, y + 1, tw + 8, 14, Color{22, 22, 35, 255});
+        DrawRectangleLines(cx + cw - tw - 8, y + 1, tw + 8, 14, tagCol);
+        DrawText(tag, cx + cw - tw - 4, y + 3, 10, tagCol);
+        y += 18;
+
+        DrawText(blessingDescription(b->effect), cx + 14, y, 11, Color{140, 120, 170, 255});
+        y += 18;
+    }
+}
+
+static void renderUnitSection(int cx, int cw, int& y, const World& world, const Unit* u) {
     drawDivider(cx, cw, y);
 
     const Color pc    = playerColor(u->getOwner().getId());
@@ -392,6 +435,8 @@ static void renderUnitSection(int cx, int cw, int& y, const Unit* u) {
     pill("ATTACK", u->canAttack(), cx + sw);
     pill(u->isExhausted() ? "DONE" : "READY", !u->isExhausted(), cx + sw * 2);
     y += 38;
+
+    renderUnitBlessings(cx, cw, y, world, u);
 }
 
 static void renderCitySection(int cx, int cw, int& y,
@@ -613,7 +658,10 @@ void InformationView::render(const World& world,
 
     if (tile.hasUnit()) {
         const Unit* u = world.getUnit(tile.getUnit().value());
-        if (u) renderUnitSection(cx, cw, y, u);
+        // Shadow-cloaked enemy units are invisible — don't reveal them in the info panel
+        bool isEnemy = u && (u->getOwner().getId() != world.getCurrentPlayer().getId());
+        if (u && !(isEnemy && u->isShadowCloaked()))
+            renderUnitSection(cx, cw, y, world, u);
     }
 
     // City info: full section for city centres, compact territory for border tiles

@@ -3,6 +3,7 @@
 
 #include <cassert>
 #include <algorithm>
+#include <cstdlib>
 
 bool BattleSystem::canAttack(Position origin, Position destination) const {
     assert(world.hasUnitAt(origin));
@@ -16,6 +17,7 @@ bool BattleSystem::canAttack(Position origin, Position destination) const {
 
     assert(!attacker->sameOwner(*defender));
 
+    if (defender->isShadowCloaked()) return false;   // cannot target an invisible unit
     return origin.distanceFrom(destination) <= attacker->getRange();
 }
 
@@ -24,6 +26,12 @@ std::optional<PlayerError> BattleSystem::battle(Position attackerPos, Position d
     Unit* defender = world.getUnitAt(defenderPos);
 
     assert(attacker && defender);
+
+    // SHADOW_VEIL: 30% chance to dodge the incoming attack entirely.
+    if (defender->hasVeil() && (std::rand() % 100) < 30) {
+        attacker->setAttacked(true);   // attacker is still exhausted
+        return std::nullopt;
+    }
 
     int dmg = attacker->computeDamageAgainst(*defender);
     dmg += world.blessingSystem.extraAttackDamage(*attacker, attackerPos, *defender, defenderPos);
@@ -45,6 +53,11 @@ std::optional<PlayerError> BattleSystem::battle(Position attackerPos, Position d
             // FLAME_SEAR: apply burn if defender survived
             world.blessingSystem.onHit(*attacker, *defender);
         }
+    }
+
+    // If the attacker was in Shadow Pounce, the buff has now fired — clear it.
+    if (attacker->isShadowCloaked()) {
+        attacker->clearShadowPounce();
     }
 
     attacker->setAttacked(true);
@@ -129,7 +142,8 @@ vector<Position> BattleSystem::getAttackSnapshot(Position origin) const {
     for (int r = 0; r < Game::HEIGHT; r++) {
         for (int c = 0; c < Game::WIDTH; c++) {
             Position pos(r, c);
-            if (world.hasUnitAt(pos) && !attacker->sameOwner(*world.getUnitAt(pos))) {
+            const Unit* defender = world.getUnitAt(pos);
+            if (defender && !attacker->sameOwner(*defender) && !defender->isShadowCloaked()) {
                 if (canAttack(origin, pos)) {
                     snapshot.push_back(pos);
                 }

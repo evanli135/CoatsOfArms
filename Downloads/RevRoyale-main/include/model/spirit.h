@@ -39,11 +39,44 @@ enum class BlessingEffect {
     MARTIAL_IRON_SKIN,    // reduce incoming physical damage taken
     MARTIAL_BATTLE_CRY,   // adjacent allies gain +attack on this unit's turn
     MARTIAL_ENDURE,       // survive a lethal blow at 1 HP once per engagement
+
+    // Scout special (index 12)
+    SHADOW_POUNCE,        // Scout vanishes for one turn; next attack deals double damage
+
+    // Cavalry special (index 13)
+    FLAME_CHARGE,         // Cavalry charges in a straight line, leaving fire trail
 };
 
+// ---------------------------------------------------------------------------
+// isActivatedAbility — true if an effect requires explicit casting (costs magic
+// and appears in the CAST menu); false if it is an always-on passive buff.
+// ---------------------------------------------------------------------------
+inline bool isActivatedAbility(BlessingEffect e) {
+    switch (e) {
+        // ── Actives (require clicking CAST, cost magic) ──────────────────────
+        case BlessingEffect::FLAME_SEAR:          return true;   // apply burn to enemy
+        case BlessingEffect::FLAME_BLAZE_AURA:    return true;   // buff nearby allies
+        case BlessingEffect::SHADOW_VEIL:         return true;   // enter concealment
+        case BlessingEffect::SHADOW_DARK_STRIKE:  return true;   // buff next attack
+        case BlessingEffect::MARTIAL_IRON_SKIN:   return true;   // reduce damage this turn
+        case BlessingEffect::MARTIAL_BATTLE_CRY:  return true;   // buff adjacent allies
+        case BlessingEffect::SHADOW_POUNCE:       return true;   // Scout special
+        case BlessingEffect::FLAME_CHARGE:        return true;   // Cavalry special (activated charge)
+
+        // ── Passives (automatic — no activation, no magic cost) ───────────────
+        case BlessingEffect::FLAME_IGNITE:        return false;  // +10 flat attack (Fury)
+        case BlessingEffect::SHADOW_STEP:         return false;  // +2 movement (Stride)
+        case BlessingEffect::GALE_SWIFTNESS:      return false;  // +1 movement
+        case BlessingEffect::GALE_FAR_REACH:      return false;  // +1 attack range
+        case BlessingEffect::GALE_TUMBLE:         return false;  // move again after attacking
+        case BlessingEffect::MARTIAL_ENDURE:      return false;  // survive lethal blow once (auto)
+    }
+    return false;
+}
+
 // A blessing is a (spirit, effect, targetUnit) triple stored per player.
-// If isMagic is true, this blessing also grants the matching spell ability
-// (SpellId index = static_cast<int>(effect)), indicated visually on the card.
+// isMagic is derived directly from the effect — active abilities cost magic and
+// show in the CAST menu; passive buffs apply automatically every turn.
 struct Blessing {
     SpiritType     spirit;
     BlessingEffect effect;
@@ -79,6 +112,8 @@ inline const char* blessingEffectName(BlessingEffect e) {
         case BlessingEffect::MARTIAL_IRON_SKIN:   return "Iron Skin";
         case BlessingEffect::MARTIAL_BATTLE_CRY:  return "Battle Cry";
         case BlessingEffect::MARTIAL_ENDURE:      return "Endure";
+        case BlessingEffect::SHADOW_POUNCE:       return "Shadow Pounce";
+        case BlessingEffect::FLAME_CHARGE:        return "Flame Charge";
     }
     return "Unknown";
 }
@@ -97,6 +132,8 @@ inline const char* blessingDescription(BlessingEffect e) {
         case BlessingEffect::MARTIAL_IRON_SKIN:   return "Reduce incoming physical damage";
         case BlessingEffect::MARTIAL_BATTLE_CRY:  return "Adjacent allies gain +attack";
         case BlessingEffect::MARTIAL_ENDURE:      return "Survive a lethal blow at 1 HP once";
+        case BlessingEffect::SHADOW_POUNCE:       return "Scout vanishes; next attack deals 2x damage";
+        case BlessingEffect::FLAME_CHARGE:        return "Cavalry charges in a line, leaving a fire trail";
     }
     return "";
 }
@@ -143,13 +180,15 @@ inline std::array<Blessing, 3> generateBlessingChoices(int playerId, int turnNum
         SpiritType tmp = spirits[i]; spirits[i] = spirits[j]; spirits[j] = tmp;
     }
 
-    // 3 effect buckets per spirit
+    // Effect buckets per spirit (FLAME has 4: 3 general + FLAME_CHARGE Cavalry-only)
     static const BlessingEffect flameEffects[]   = { BlessingEffect::FLAME_SEAR,
                                                       BlessingEffect::FLAME_BLAZE_AURA,
-                                                      BlessingEffect::FLAME_IGNITE };
+                                                      BlessingEffect::FLAME_IGNITE,
+                                                      BlessingEffect::FLAME_CHARGE };
     static const BlessingEffect shadowEffects[]  = { BlessingEffect::SHADOW_VEIL,
                                                       BlessingEffect::SHADOW_STEP,
-                                                      BlessingEffect::SHADOW_DARK_STRIKE };
+                                                      BlessingEffect::SHADOW_DARK_STRIKE,
+                                                      BlessingEffect::SHADOW_POUNCE };
     static const BlessingEffect galeEffects[]    = { BlessingEffect::GALE_SWIFTNESS,
                                                       BlessingEffect::GALE_FAR_REACH,
                                                       BlessingEffect::GALE_TUMBLE };
@@ -158,12 +197,16 @@ inline std::array<Blessing, 3> generateBlessingChoices(int playerId, int turnNum
                                                       BlessingEffect::MARTIAL_ENDURE };
 
     auto pickEffect = [&](SpiritType s) -> BlessingEffect {
+        switch (s) {
+        case SpiritType::FLAME:  { int i = randN(4); return flameEffects[i]; }
+        case SpiritType::SHADOW: { int i = randN(4); return shadowEffects[i]; }
+        default: break;
+        }
         int i = randN(3);
         switch (s) {
-            case SpiritType::FLAME:   return flameEffects[i];
-            case SpiritType::SHADOW:  return shadowEffects[i];
             case SpiritType::GALE:    return galeEffects[i];
             case SpiritType::MARTIAL: return martialEffects[i];
+            default: break;
         }
         return BlessingEffect::FLAME_SEAR;
     };
@@ -175,8 +218,18 @@ inline std::array<Blessing, 3> generateBlessingChoices(int playerId, int turnNum
 
     std::array<Blessing, 3> choices;
     for (int i = 0; i < 3; ++i) {
-        bool magic = (randN(10) < 4);   // 40% chance this card is also a magic ability
-        choices[i] = Blessing{ spirits[i], pickEffect(spirits[i]), UNIT_TYPES[randN(5)], magic };
+        BlessingEffect effect = pickEffect(spirits[i]);
+
+        // Unit type: FLAME_CHARGE is Cavalry-only; SHADOW_POUNCE is Scout-only; rest are random.
+        UnitType targetUnit =
+            (effect == BlessingEffect::FLAME_CHARGE)  ? UnitType::CAVALRY :
+            (effect == BlessingEffect::SHADOW_POUNCE) ? UnitType::SCOUT
+                                                      : UNIT_TYPES[randN(5)];
+
+        // isMagic is determined by the effect — never random.
+        bool magic = isActivatedAbility(effect);
+
+        choices[i] = Blessing{ spirits[i], effect, targetUnit, magic };
     }
     return choices;
 }

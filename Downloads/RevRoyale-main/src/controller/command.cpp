@@ -100,15 +100,41 @@ void ConstructCommand::undo(World& world) {
 // ---------------------------------------------------------------------------
 
 std::optional<PlayerError> CastCommand::execute(World& world) {
-    return world.magicSystem.castSpell(casterPos, targetPos, spell, player);
+    auto result = world.magicSystem.castSpell(casterPos, targetPos, spell, player);
+    // For VEIL, record which positions received the buff so undo can clear them.
+    if (!result.has_value() && spell == SpellId::VEIL) {
+        veiledPositions.clear();
+        veiledPositions.push_back(casterPos);
+        for (int dr = -1; dr <= 1; ++dr) {
+            for (int dc = -1; dc <= 1; ++dc) {
+                if (dr == 0 && dc == 0) continue;
+                int nr = casterPos.row() + dr;
+                int nc = casterPos.col() + dc;
+                if (nr < 0 || nr >= 16 || nc < 0 || nc >= 16) continue;
+                Position adj(nr, nc);
+                const Unit* u = world.getUnitAt(adj);
+                if (u && u->sameOwner(player)) veiledPositions.push_back(adj);
+            }
+        }
+    }
+    return result;
 }
 
 void CastCommand::undo(World& world) {
     if (Unit* caster = world.getUnitAt(casterPos)) {
         caster->setMagic(casterMagicBefore);
         caster->setAttacked(false);
+        if (spell == SpellId::SHADOW_POUNCE) {
+            caster->clearShadowPounce();
+        }
     }
-    if (!targetWasBurning) {
+    if (spell == SpellId::VEIL) {
+        for (const Position& pos : veiledPositions) {
+            if (Unit* u = world.getUnitAt(pos)) u->clearVeil();
+        }
+        return;
+    }
+    if (spell != SpellId::SHADOW_POUNCE && !targetWasBurning) {
         if (Unit* target = world.getUnitAt(targetPos)) {
             target->clearBurn();
         }

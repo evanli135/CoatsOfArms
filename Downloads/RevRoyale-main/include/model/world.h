@@ -312,6 +312,9 @@ public:
         return spiritSystem.getPendingPrayChoices(playerId);
     }
 
+    /** Damage units on fire tiles and tick fire counters down.  Called in nextTurn. */
+    void advanceFire();
+
     void startGame();
 
     /** Returns the set of tile positions visible to the given player this turn. */
